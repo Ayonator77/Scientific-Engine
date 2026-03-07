@@ -1,0 +1,42 @@
+# Build directories and CMake artifacts
+build/
+.cache/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+compile_commands.json
+Makefile
+*.cmake
+
+# vcpkg dependencies
+vcpkg_installed/
+vcpkg-manifest-install.log
+
+# Visual Studio & MSVC Compiler files
+*.sln
+*.slnx
+*.suo
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.idb
+
+# VS Code / Neovim settings
+.vscode/
+.cache/
+*.swp
+*.swo
+
+# Compiled executables and dynamic libraries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# OS generated files
+.DS_Store
+Thumbs.db
