@@ -1,5 +1,8 @@
 #include "Application.h"
+#include "core/Camera.h"
 #include "geometry/Icosahedron.h"
+#include <SDL_video.h>
+#include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <stdexcept>
 // #include <glad/glad.h>
@@ -9,16 +12,18 @@
 const char *vertexShaderSource =
     "#version 460 core\n"
     "layout (location = 0) in vec3 aPos;\n"
+    "uniform mat4 model;\n"
+    "uniform mat4 view;\n"
+    "uniform mat4 projection;\n"
     "void main() {\n"
-    "   gl_Position = vec4(aPos * 0.5, 1.0);\n" // Scale it down by 0.5 so it
-                                                // fits in the window
+    "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
     "}\n";
 
 const char *fragmentShaderSource =
     "#version 460 core\n"
     "out vec4 FragColor;\n"
     "void main() {\n"
-    "   FragColor = vec4(0.0f, 1.0f, 0.5f, 1.0f);\n" // Seafoam green
+    "   FragColor = vec4(0.2f, 0.8f, 0.4f, 1.0f);\n"
     "}\n";
 
 Application::Application(const std::string &title, int width, int height)
@@ -41,6 +46,8 @@ void Application::Init() {
   // Enable double buffering
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
   m_window = SDL_CreateWindow(m_title.c_str(), SDL_WINDOWPOS_CENTERED,
                               SDL_WINDOWPOS_CENTERED, m_width, m_height,
                               SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
@@ -58,6 +65,8 @@ void Application::Init() {
   if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
     throw std::runtime_error("Failed to initialize GLAD");
   }
+
+  glEnable(GL_DEPTH_TEST);
 
   // Output the specific graphics hardware and OpenGL version to terminal
   const GLubyte *vendor = glGetString(GL_VENDOR);
@@ -100,6 +109,10 @@ void Application::run() {
 
   glDeleteShader(vertexShader);
   glDeleteShader(fragmentShader);
+
+  unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
+  unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
+  unsigned int projLoc = glGetUniformLocation(shaderProgram, "projection");
   // ---------------------------------------
 
   Icosahedron planet_core;
@@ -110,25 +123,53 @@ void Application::run() {
 
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+  Camera camera(m_width, m_height);
+
   SDL_Event event;
+  bool isDragging = false;
 
   while (m_isRunning) {
-    // 1. Handle input
-
     while (SDL_PollEvent(&event)) {
-      if (event.type == SDL_QUIT) {
+      if (event.type == SDL_QUIT)
         m_isRunning = false;
+      if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
+        m_isRunning = false;
+
+      // Camera Input Handling
+      if (event.type == SDL_MOUSEBUTTONDOWN &&
+          event.button.button == SDL_BUTTON_LEFT)
+        isDragging = true;
+      if (event.type == SDL_MOUSEBUTTONUP &&
+          event.button.button == SDL_BUTTON_LEFT)
+        isDragging = false;
+      if (event.type == SDL_MOUSEMOTION && isDragging) {
+        // Negative Y because screen coordinates go down, but 3D coordinates go
+        // up
+        camera.ProcessMouseMovement((float)event.motion.xrel,
+                                    (float)-event.motion.yrel);
       }
-      if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
-        m_isRunning = false;
+      if (event.type == SDL_MOUSEWHEEL) {
+        camera.ProcessMouseScroll((float)event.wheel.y);
       }
     }
 
     glClearColor(0.1f, 0.15f, 0.2f, 1.0f); // color: dark blue-gray
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Bind shader and issue draw command
     glUseProgram(shaderProgram);
+    // 1. Model Matrix (Identity matrix because planet is at 0,0,0)
+    glm::mat4 model = glm::mat4(1.0f);
+    // 2. View Matrix from Camera
+    glm::mat4 view = camera.GetViewMatrix();
+    // 3. Projection Matrix from Camera
+    glm::mat4 projection = camera.GetProjectionMatrix();
+
+    // Send matrices to GPU
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
     planet_core.Draw();
 
     // Swap buffers to display the rendered frame
