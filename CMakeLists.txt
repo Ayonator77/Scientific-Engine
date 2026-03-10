@@ -18,6 +18,8 @@ find_package(GTest CONFIG REQUIRED)
 add_library(engine_core
     src/core/Application.cpp
     src/core/Camera.cpp
+    src/core/Shader.cpp
+    src/core/Input.cpp
     src/geometry/Icosahedron.cpp
     # We will add more source files here as we build them
 )

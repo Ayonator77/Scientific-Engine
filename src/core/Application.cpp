@@ -1,30 +1,16 @@
 #include "Application.h"
 #include "core/Camera.h"
+#include "core/Input.h"
+#include "core/Shader.h"
 #include "geometry/Icosahedron.h"
+#include <SDL_mouse.h>
+#include <SDL_stdinc.h>
 #include <SDL_video.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <stdexcept>
 // #include <glad/glad.h>
 // #include <SDL2/SDL.h>
-
-// --- TEMPORARY HARDCODED SHADERS ---
-const char *vertexShaderSource =
-    "#version 460 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "uniform mat4 model;\n"
-    "uniform mat4 view;\n"
-    "uniform mat4 projection;\n"
-    "void main() {\n"
-    "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
-    "}\n";
-
-const char *fragmentShaderSource =
-    "#version 460 core\n"
-    "out vec4 FragColor;\n"
-    "void main() {\n"
-    "   FragColor = vec4(0.2f, 0.8f, 0.4f, 1.0f);\n"
-    "}\n";
 
 Application::Application(const std::string &title, int width, int height)
     : m_title(title), m_width(width), m_height(height), m_isRunning(false),
@@ -42,6 +28,9 @@ void Application::Init() {
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+  // Enable relative mouse mode
+  // SDL_SetRelativeMouseMode(SDL_TRUE);
 
   // Enable double buffering
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -93,82 +82,63 @@ void Application::Init() {
 
 void Application::run() {
 
-  // --- COMPILE SHADERS BEFORE THE LOOP ---
-  unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-  glCompileShader(vertexShader);
+  // Load Shader from the assets folder
+  Shader planetShader("assets/shaders/planet.vert",
+                      "assets/shaders/planet.frag");
 
-  unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-  glCompileShader(fragmentShader);
-
-  unsigned int shaderProgram = glCreateProgram();
-  glAttachShader(shaderProgram, vertexShader);
-  glAttachShader(shaderProgram, fragmentShader);
-  glLinkProgram(shaderProgram);
-
-  glDeleteShader(vertexShader);
-  glDeleteShader(fragmentShader);
-
-  unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
-  unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
-  unsigned int projLoc = glGetUniformLocation(shaderProgram, "projection");
-  // ---------------------------------------
-
+  // generate planet
   Icosahedron planet_core;
 
   planet_core.Subdivide(5);
 
   planet_core.ApplyTerrainNoise(0.15f, 2.0f, 6);
 
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
+  // setup camera
   Camera camera(m_width, m_height);
+
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
   SDL_Event event;
   bool isDragging = false;
 
   while (m_isRunning) {
+    // --- 1. EVENT PUMP ---
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_QUIT)
         m_isRunning = false;
-      if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
-        m_isRunning = false;
-
-      // Camera Input Handling
-      if (event.type == SDL_MOUSEBUTTONDOWN &&
-          event.button.button == SDL_BUTTON_LEFT)
-        isDragging = true;
-      if (event.type == SDL_MOUSEBUTTONUP &&
-          event.button.button == SDL_BUTTON_LEFT)
-        isDragging = false;
-      if (event.type == SDL_MOUSEMOTION && isDragging) {
-        // Negative Y because screen coordinates go down, but 3D coordinates go
-        // up
-        camera.ProcessMouseMovement((float)event.motion.xrel,
-                                    (float)-event.motion.yrel);
-      }
       if (event.type == SDL_MOUSEWHEEL) {
         camera.ProcessMouseScroll((float)event.wheel.y);
       }
     }
 
-    glClearColor(0.1f, 0.15f, 0.2f, 1.0f); // color: dark blue-gray
+    // --- 2. INPUT UPDATE ---
+    Input::Update();
+
+    // Check for escape key to exit
+    if (Input::IsKeyHeld(SDL_SCANCODE_ESCAPE)) {
+      m_isRunning = false;
+    }
+
+    // Check for left click to orbit
+    if (Input::IsMouseButtonHeld(SDL_BUTTON_LEFT)) {
+      // Notice how clean this is compared to tracking bools in the event loop
+      camera.ProcessMouseMovement(Input::GetMouseDeltaX(),
+                                  -Input::GetMouseDeltaY());
+    }
+
+    // glClearColor(0.1f, 0.15f, 0.2f, 1.0f); // color: dark blue-gray
+    // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // --- 3. RENDERING ---
+    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Bind shader and issue draw command
-    glUseProgram(shaderProgram);
-    // 1. Model Matrix (Identity matrix because planet is at 0,0,0)
-    glm::mat4 model = glm::mat4(1.0f);
-    // 2. View Matrix from Camera
-    glm::mat4 view = camera.GetViewMatrix();
-    // 3. Projection Matrix from Camera
-    glm::mat4 projection = camera.GetProjectionMatrix();
+    planetShader.Bind();
 
-    // Send matrices to GPU
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+    // The Shader class handles the uniform complexity for us
+    planetShader.SetMat4("model", glm::mat4(1.0f));
+    planetShader.SetMat4("view", camera.GetViewMatrix());
+    planetShader.SetMat4("projection", camera.GetProjectionMatrix());
 
     planet_core.Draw();
 

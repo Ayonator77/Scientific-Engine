@@ -6,7 +6,6 @@
 #include <vector>
 
 class Icosahedron {
-
 public:
   Icosahedron();
   ~Icosahedron();
@@ -14,7 +13,6 @@ public:
   Icosahedron(const Icosahedron &) = delete;
   Icosahedron &operator=(const Icosahedron &) = delete;
 
-  // core procedural generation functions
   void Subdivide(int subdivisions);
   void ApplyTerrainNoise(float amplitude, float frequency, int octaves);
 
@@ -23,13 +21,15 @@ public:
 private:
   void GenerateBaseGeometry();
   void SetupBuffers();
+  void CalculateNormals();
 
   unsigned int GetMiddlePoint(
       unsigned int p1, unsigned int p2,
       std::map<std::pair<unsigned int, unsigned int>, unsigned int> &cache);
 
   std::vector<glm::vec3> m_vertices;
+  std::vector<glm::vec3> m_normals;
   std::vector<unsigned int> m_indices;
 
-  unsigned int m_VAO, m_VBO, m_EBO;
+  unsigned int m_VAO, m_VBO, m_EBO, m_normalVBO;
 };
