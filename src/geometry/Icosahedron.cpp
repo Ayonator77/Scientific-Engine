@@ -88,65 +88,64 @@ void Icosahedron::Subdivide(int subdivisions) {
   SetupBuffers();
 }
 
-void Icosahedron::ApplyTerrainNoise(float amplitude, float frequency,
-                                    int octaves) {
-  for (auto &vertex : m_vertices) {
-    glm::vec3 direction = glm::normalize(vertex);
-    float elevation = 0.0f;
-    float currentFreq = frequency;
-    float currentAmp = amplitude;
-    float weight = 1.0f;
+// seed offsets the noise sample space so the same frequency/amplitude
+// settings produce a different terrain shape per seed value.
+void Icosahedron::ApplyTerrainNoise(float amplitude, float frequency, int octaves, float seaLevel, uint32_t seed){
+    // Deterministic but varied offset per seed — prime multipliers spread
+    // the offset unevenly across each axis to avoid axis-aligned artifacts.
+    glm::vec3 seedOffset(
+        static_cast<float>(seed) * 0.1270f,
+        static_cast<float>(seed) * 0.3117f,
+        static_cast<float>(seed) * 0.7431f
+    );
 
-    for (int i = 0; i < octaves; ++i) {
-      float rawNoise = glm::simplex(direction * currentFreq);
-      float ridge = 1.0f - std::abs(rawNoise);
-      ridge *= ridge;
-      ridge *= weight;
-      weight = ridge;
-      elevation += ridge * currentAmp;
-      currentFreq *= 2.0f;
-      currentAmp *= 0.5f;
+    for (auto& vertex : m_vertices) {
+        glm::vec3 direction = glm::normalize(vertex);
+        float elevation    = 0.0f;
+        float currentFreq  = frequency;
+        float currentAmp   = amplitude;
+        float weight       = 1.0f;
+
+        for (int i = 0; i < octaves; ++i) {
+            glm::vec3 samplePoint = direction * currentFreq + seedOffset;
+            float rawNoise = glm::simplex(samplePoint);
+            float ridge    = 1.0f - std::abs(rawNoise);
+            ridge         *= ridge;
+            ridge         *= weight;
+            weight         = ridge;
+            elevation     += ridge * currentAmp;
+            currentFreq   *= 2.0f;
+            currentAmp    *= 0.5f;
+        }
+
+        if (elevation < seaLevel) elevation = seaLevel;
+        vertex = direction * (1.0f + elevation);
     }
 
-    float seaLevel = 0.05f;
-    if (elevation < seaLevel) {
-      elevation = seaLevel;
-    }
-
-    vertex = direction * (1.0f + elevation);
-  }
-  // CRITICAL: We must recalculate normals after the vertices move!
-  CalculateNormals();
-  SetupBuffers();
+    CalculateNormals();
+    SetupBuffers();
 }
 
 void Icosahedron::CalculateNormals() {
-  m_normals.assign(m_vertices.size(), glm::vec3(0.0f));
+    m_normals.assign(m_vertices.size(), glm::vec3(0.0f));
 
-  for (size_t i = 0; i < m_indices.size(); i += 3) {
-    unsigned int i1 = m_indices[i];
-    unsigned int i2 = m_indices[i + 1];
-    unsigned int i3 = m_indices[i + 2];
+    for (size_t i = 0; i < m_indices.size(); i += 3) {
+        unsigned int i1 = m_indices[i];
+        unsigned int i2 = m_indices[i + 1];
+        unsigned int i3 = m_indices[i + 2];
 
-    glm::vec3 v1 = m_vertices[i1];
-    glm::vec3 v2 = m_vertices[i2];
-    glm::vec3 v3 = m_vertices[i3];
+        glm::vec3 edge1 = m_vertices[i2] - m_vertices[i1];
+        glm::vec3 edge2 = m_vertices[i3] - m_vertices[i1];
+        glm::vec3 faceNormal = glm::normalize(glm::cross(edge1, edge2));
 
-    glm::vec3 edge1 = v2 - v1;
-    glm::vec3 edge2 = v3 - v1;
+        m_normals[i1] += faceNormal;
+        m_normals[i2] += faceNormal;
+        m_normals[i3] += faceNormal;
+    }
 
-    // The Cross Product generates the perpendicular normal vector
-    glm::vec3 faceNormal = glm::normalize(glm::cross(edge1, edge2));
-
-    m_normals[i1] += faceNormal;
-    m_normals[i2] += faceNormal;
-    m_normals[i3] += faceNormal;
-  }
-
-  for (auto &normal : m_normals) {
-    normal = glm::normalize(normal);
-  }
+    for (auto& n : m_normals) n = glm::normalize(n);
 }
+
 
 void Icosahedron::SetupBuffers() {
   if (m_VAO == 0) {

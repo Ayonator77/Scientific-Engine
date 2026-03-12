@@ -1,11 +1,12 @@
 {
   "name": "scientific-engine",
   "version-string": "0.1.0",
-  "description": "A high-performance scientific computing and simulation engine.",
+  "description": "Scientific simulation engine.",
   "dependencies": [
     "sdl2",
     "glad",
     "glm",
-    "gtest"
+    "gtest",
+    "spdlog"
   ]
 }
