@@ -14,7 +14,8 @@ public:
   Icosahedron &operator=(const Icosahedron &) = delete;
 
   void Subdivide(int subdivisions);
-  void ApplyTerrainNoise(float amplitude, float frequency, int octaves);
+  void ApplyTerrainNoise(float amplitude, float frequency, int octaves,
+                           float seaLevel = 0.05f, uint32_t seed = 0);
 
   void Draw() const;
 
