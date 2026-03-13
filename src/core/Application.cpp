@@ -105,15 +105,6 @@ std::unique_ptr<Icosahedron> BuildPlanet(const PlanetParams& p) {
   return planet;
 }
 
-bool Application::RaycastLights(int mouseX, int mouseY){
-  return false; //Real implementation is in run()
-}
-
-void Application::RenderLightBillBoards() {
-  //called from run() after binding the billboard shader
-  //implementation is inline in run()
-}
-
 
 void Application::run() {
 
@@ -203,9 +194,10 @@ void Application::run() {
         }
 
         // ---- Input ----
-        Input::Update();
+        m_input.Update();
 
-        if (Input::IsKeyHeld(SDL_SCANCODE_ESCAPE))
+
+        if (m_input.IsKeyHeld(SDL_SCANCODE_ESCAPE))
             m_isRunning = false;
 
         // G + drag → move selected light in camera plane
@@ -213,20 +205,18 @@ void Application::run() {
         for (const auto& l : m_lights)
             if (l.selected) { anyLightSelected = true; break; }
 
-        if (anyLightSelected && Input::IsKeyHeld(SDL_SCANCODE_G)) {
+        if (anyLightSelected && m_input.IsKeyHeld(SDL_SCANCODE_G)) {
             glm::mat4 view = camera.GetViewMatrix();
             glm::vec3 camRight = glm::normalize(glm::vec3(view[0][0], view[1][0], view[2][0]));
             glm::vec3 camUp    = glm::normalize(glm::vec3(view[0][1], view[1][1], view[2][1]));
             const float grabSpeed = 0.008f;
             for (auto& l : m_lights) {
                 if (!l.selected) continue;
-                l.position += camRight * Input::GetMouseDeltaX()  *  grabSpeed;
-                l.position += camUp    * Input::GetMouseDeltaY()  * -grabSpeed;
+                l.position += camRight * m_input.GetMouseDeltaX()  *  grabSpeed;
+                l.position += camUp    * m_input.GetMouseDeltaY()  * -grabSpeed;
             }
-        } else if (Input::IsMouseButtonHeld(SDL_BUTTON_LEFT) &&
-                   !m_editor->WantsCaptureMouse()) {
-            camera.ProcessMouseMovement(Input::GetMouseDeltaX(),
-                                        -Input::GetMouseDeltaY());
+        } else if (m_input.IsMouseButtonHeld(SDL_BUTTON_LEFT) && !m_editor->WantsCaptureMouse()) {
+            camera.ProcessMouseMovement(m_input.GetMouseDeltaX(), -m_input.GetMouseDeltaY());
         }
 
         // ---- Clear ----

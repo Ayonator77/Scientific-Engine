@@ -4,17 +4,19 @@
 
 class Input {
 public:
-  static void Update();
+  Input() = default;
 
-  static bool IsKeyHeld(SDL_Scancode key);
-  static bool IsMouseButtonHeld(int button);
+  void Update();
 
-  static float GetMouseDeltaX();
-  static float GetMouseDeltaY();
+  bool IsKeyHeld(SDL_Scancode key) const;
+  bool IsMouseButtonHeld(int button) const;
+
+  float GetMouseDeltaX() const;
+  float GetMouseDeltaY() const;
 
 private:
-  static int s_deltaX;
-  static int s_deltaY;
-  static const Uint8 *s_keyboardState;
-  static Uint32 s_mouseState;
+  int m_deltaX = 0;
+  int m_deltaY = 0;
+  const Uint8 *m_keyboardState = nullptr;
+  Uint32 m_mouseState = 0;
 };
