@@ -13,6 +13,7 @@
 #include "core/PlanetParams.h"
 #include "core/PointLight.h"
 #include "core/Input.h" 
+#include "core/Renderer.h"
 
 class Application {
 public:
@@ -27,8 +28,8 @@ public:
 private:
     void Init();
     void Cleanup();
+    void ProcessInput(Camera& camera);
 
-    // Removed the fake RaycastLights and RenderLightBillBoards stubs
 
     // Core State
     bool m_isRunning;
@@ -41,9 +42,9 @@ private:
     // Engine Subsystems
     Input m_input; // Instance-owned input snapshot
     std::unique_ptr<Editor> m_editor;
+    std::unique_ptr<Renderer> m_renderer;
     
     // Engine State
     PlanetParams m_planet_params;
     std::vector<PointLight> m_lights;
-    unsigned int m_dummy_VAO = 0;
 };
