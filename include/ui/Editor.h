@@ -29,7 +29,7 @@ public:
    Editor& operator=(const Editor&) = delete; 
 
    //Feed SDL events into ImGui
-   void ProccessEvent(const SDL_Event& event);
+   void ProcessEvent(const SDL_Event& event);
 
    void BeginFrame();
    void EndFrame();
