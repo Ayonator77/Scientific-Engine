@@ -20,7 +20,7 @@ void main() {
     vec3 objectColor = vec3(0.22, 0.58, 0.28);
 
     // Small ambient so the dark side is never pure black
-    vec3 result = vec3(0.03) * objectColor;
+    vec3 result = vec3(0.00) * objectColor;
 
     for (int i = 0; i < u_numLights; i++) {
         vec3  toLight     = u_lights[i].position - FragPos;
