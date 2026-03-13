@@ -25,7 +25,7 @@ Editor::~Editor(){
     ImGui::DestroyContext();
 }
 
-void Editor::ProccessEvent(const SDL_Event& event){
+void Editor::ProcessEvent(const SDL_Event& event){
     ImGui_ImplSDL2_ProcessEvent(&event);
 }
 

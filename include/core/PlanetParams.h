@@ -8,9 +8,9 @@
  */
 struct PlanetParams{
     uint32_t seed  = 42;
-    int subdivisions = 5;
+    int subdivisions = 6;
     float amplitude = 0.1f;
-    float frequency = 2.0f;
+    float frequency = 1.26f;
     int octaves = 6;
-    float sea_level = 0.05f; 
+    float sea_level = 0.03f; 
 };

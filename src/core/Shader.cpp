@@ -88,21 +88,17 @@ void Shader::CheckCompileErrors(unsigned int shader, std::string type) {
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
       glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-      std::cerr
-          << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n"
-          << infoLog
-          << "\n -- --------------------------------------------------- -- "
-          << std::endl;
+      std::string err = "ERROR::SHADER_COMPILATION_ERROR of type: " + type + "\n" + infoLog;
+      std::cerr << err << "\n -- --------------------------------------------------- -- " << std::endl;
+      throw std::runtime_error(err);
     }
   } else {
     glGetProgramiv(shader, GL_LINK_STATUS, &success);
     if (!success) {
       glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-      std::cerr
-          << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n"
-          << infoLog
-          << "\n -- --------------------------------------------------- -- "
-          << std::endl;
+      std::string err = "ERROR::PROGRAM_LINKING_ERROR of type: " + type + "\n" + infoLog;
+      std::cerr << err << "\n -- --------------------------------------------------- -- " << std::endl;
+      throw std::runtime_error(err);
     }
   }
 }

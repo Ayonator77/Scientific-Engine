@@ -148,7 +148,7 @@ void Application::run() {
     
     //Events
     while (SDL_PollEvent(&event)) {
-      m_editor->ProccessEvent(event);
+      m_editor->ProcessEvent(event);
 
       if (event.type == SDL_QUIT) m_isRunning = false;
       
