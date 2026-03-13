@@ -33,8 +33,9 @@ Shader::Shader(const char *vertex_path, const char *fragment_path) {
     vertex_Code = v_shader_stream.str();
     fragment_code = f_shader_stream.str();
   } catch (std::ifstream::failure &e) {
-    std::cerr << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << vertex_path
-              << std::endl;
+    std::string err = "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " + std::string(vertex_path);
+    std::cerr << err << std::endl;
+    throw std::runtime_error(err);
   }
 
   const char *v_shader_code = vertex_Code.c_str();

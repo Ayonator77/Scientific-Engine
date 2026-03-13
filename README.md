@@ -85,5 +85,3 @@ The current entry point is `Application`, which owns the SDL/OpenGL context, the
 ---
 
 ## License
-
-[Add your license here]

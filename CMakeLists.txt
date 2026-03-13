@@ -48,6 +48,7 @@ target_link_libraries(imgui_docking PUBLIC SDL2::SDL2 glad::glad)
 add_library(engine_core
     src/core/Application.cpp
     src/core/Camera.cpp
+    src/core/ComputeShader.cpp
     src/core/Shader.cpp
     src/core/Input.cpp
     src/core/GraphicsContext.cpp
@@ -76,12 +77,19 @@ target_link_libraries(engine_core PUBLIC
 add_executable(HydrostaticSim src/main.cpp)
 target_link_libraries(HydrostaticSim PRIVATE engine_core)
 
+set_target_properties(HydrostaticSim PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 # Copy runtime DLLs next to the exe (needed on Windows)
 add_custom_command(TARGET HydrostaticSim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_RUNTIME_DLLS:HydrostaticSim>
         $<TARGET_FILE_DIR:HydrostaticSim>
     COMMAND_EXPAND_LISTS
+)
+
+add_custom_command(TARGET HydrostaticSim POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:HydrostaticSim>/assets"
 )
 
 # ---------------------------------------------------------
