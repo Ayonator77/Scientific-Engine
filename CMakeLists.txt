@@ -56,6 +56,7 @@ add_library(engine_core
     src/core/Renderer.cpp
     src/geometry/Icosahedron.cpp
     src/ui/Editor.cpp
+    src/physics/SphSolver.cpp
 )
 
 target_include_directories(engine_core PUBLIC

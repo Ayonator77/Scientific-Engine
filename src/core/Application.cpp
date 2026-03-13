@@ -1,5 +1,4 @@
 #include "core/Application.h"
-#include "physics/Particle.h"
 
 Application::Application(const std::string& title, int width, int height)
     : m_isRunning(false), m_width(width), m_height(height) 
