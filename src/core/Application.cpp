@@ -73,6 +73,8 @@ void Application::run() {
         if (m_scene->GetPlanet()) {
             m_renderer->DrawPlanet(*m_scene->GetPlanet(), m_scene->GetCamera(), m_scene->GetLights());
         }
+
+        m_renderer->DrawParticle(m_scene->GetSphSolver().GetVAO(), m_scene->GetSphSolver().GetParticleCount(), m_scene->GetCamera());
         m_renderer->DrawLightBillboard(m_scene->GetCamera(), m_scene->GetLights());
 
         // UI Phase

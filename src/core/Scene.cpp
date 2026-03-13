@@ -9,6 +9,9 @@ Scene::Scene(int viewportWidth, int viewportHeight) : m_camera(viewportWidth, vi
         .selected  = false,
         .name      = "Key Light"
     });
+
+    SphParams default_params;
+    m_sph_solver = std::make_unique<SphSolver>(default_params);
     RegeneratePlanet();
 }
 

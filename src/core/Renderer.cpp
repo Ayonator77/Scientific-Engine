@@ -3,6 +3,7 @@
 Renderer::Renderer() {
     m_planet_shader = std::make_unique<Shader>("assets/shaders/planet.vert", "assets/shaders/planet.frag");
     m_light_shader  = std::make_unique<Shader>("assets/shaders/light.vert",  "assets/shaders/light.frag");
+    m_particle_shader = std::make_unique<Shader>("assets/shaders/particle.vert", "assets/shaders/particle.frag");
 
     glGenVertexArrays(1, &m_dummy_VAO);
 }
@@ -55,5 +56,21 @@ void Renderer::DrawLightBillboard(const Camera& camera, const std::vector<PointL
         glDrawArrays(GL_POINTS, 0, 1);
     }
     glBindVertexArray(0);
+    glDisable(GL_BLEND);
+}
+
+void Renderer::DrawParticle(unsigned int vao, int particle_count, const Camera& camera){
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    m_particle_shader->Bind();
+    m_particle_shader->SetMat4("view", camera.GetViewMatrix());
+    m_particle_shader->SetMat4("projection", camera.GetProjectionMatrix());
+
+    glBindVertexArray(vao);
+    glDrawArrays(GL_POINTS, 0, particle_count);
+    glBindVertexArray(0);
+
+    glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
 }
