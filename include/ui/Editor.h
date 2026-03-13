@@ -8,8 +8,7 @@
  * Output flags that the applicaiton reads each frame to act on UI events
  * Keeps the editor completly decoupled from the engine objects 
  */
-
- struct EditorOutput
+struct EditorOutput
  {
     bool planet_regen_requested = false;
  };
@@ -19,7 +18,6 @@
   * Owns full logic of ImGui lifecycle (init, frame, shutdown)
   * All panel logic is private to keep public API clean and minimal
   */
-
 class Editor{
 public:
    Editor(SDL_Window* window, SDL_GLContext gl_context);
