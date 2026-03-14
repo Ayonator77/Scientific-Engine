@@ -51,7 +51,6 @@ private:
    void RenderMenuBar();
    void RenderPlanetPanel(PlanetParams& planetParams, EditorOutput& output);
    void RenderLightsPanel(std::vector<PointLight>& pointLights);
-   //void RenderSimPanel(float kinetic_energy, int particle_count);
    void RenderStatsBar(float fps, int particle_count);
 
    bool m_first_frame = true;

@@ -36,7 +36,6 @@ void main() {
     for(int j =0; j< u_numParticles; j++){
         vec3 diff = pos - particles[j].position.xyz;
         float r2 = dot(diff, diff);
-
         if (r2 < h2){
             float val = h2 - r2;
             density += mass * poly6_constant * val * val * val;

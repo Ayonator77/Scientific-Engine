@@ -44,7 +44,6 @@ void ComputeShader::SetFloat(const std::string &name, float value) const { glUni
 void ComputeShader::SetInt(const std::string &name, int value) const { glUniform1i(glGetUniformLocation(ID, name.c_str()), value); }
 void ComputeShader::SetVec3(const std::string &name, const glm::vec3 &vec) const { glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, &vec[0]); }
 
-
 void ComputeShader::CheckCompileErrors(unsigned int shader, std::string type) {
     int success;
     char infoLog[1024];

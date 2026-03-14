@@ -53,7 +53,6 @@ void Application::ProcessInput() {
 }
 
 
-
 void Application::run() {
     Uint64 now = SDL_GetPerformanceCounter();
     Uint64 last = now;

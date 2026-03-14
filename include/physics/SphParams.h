@@ -1,7 +1,7 @@
 #pragma once
 
 struct SphParams {
-    int spawn_count = 27000;
+    int spawn_count = 8000;
     int active_particle_count = 0;
     float smoothing_radius = 0.2f;
     float target_density = 2000.0f; // water is roughly 1000 kg/m^3

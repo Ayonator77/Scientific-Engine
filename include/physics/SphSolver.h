@@ -33,6 +33,4 @@ private:
     // You cannot calculate force until every particle knows its neighbor's density.
     std::unique_ptr<ComputeShader> m_compute_density_pressure;
     std::unique_ptr<ComputeShader> m_compute_forces;
-
-
 };

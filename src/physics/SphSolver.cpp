@@ -9,7 +9,6 @@ SphSolver::SphSolver(const SphParams& params) : m_params(params) {
     // Load the compute shaders (we will create these files next)
     m_compute_density_pressure = std::make_unique<ComputeShader>("assets/shaders/sph_density.comp");
     m_compute_forces = std::make_unique<ComputeShader>("assets/shaders/sph_forces.comp");
-
     Reset();
 }
 
@@ -78,7 +77,7 @@ void SphSolver::Update(float dt) {
     if (dt > 0.02f) dt = 0.02f;
 
     // Sub-stepping: slice the frame into 4 smaller, highly stable physics steps
-    const int SUB_STEPS = 4;
+    const int SUB_STEPS = 2;
     float sub_dt = dt / static_cast<float>(SUB_STEPS);
     
     // The GPU ONLY reads the active, perfectly cubic particle count
