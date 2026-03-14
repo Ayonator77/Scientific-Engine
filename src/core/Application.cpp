@@ -68,7 +68,10 @@ void Application::run() {
         // Input Phase
         ProcessInput();
 
-        //Render Phase
+        // Physics Phase
+        m_scene->GetSphSolver().Update(dt);
+
+        // Render Phase
         m_renderer->Clear();
         if (m_scene->GetPlanet()) {
             m_renderer->DrawPlanet(*m_scene->GetPlanet(), m_scene->GetCamera(), m_scene->GetLights());
@@ -79,11 +82,15 @@ void Application::run() {
 
         // UI Phase
         m_editor->BeginFrame();
-        EditorOutput out = m_editor->OnRender(m_scene->GetPlanetParams(), m_scene->GetLights(), fps, 0, 0.0f);
+        EditorOutput out = m_editor->OnRender(m_scene->GetPlanetParams(), m_scene->GetSphSolver().GetParams(), m_scene->GetLights(), fps, 0, 0.0f);
         m_editor->EndFrame();
-
+ 
         if (out.planet_regen_requested) {
             m_scene->RegeneratePlanet();
+        }
+
+        if(out.sim_reset_requested){
+            m_scene->GetSphSolver().Reset();
         }
 
         m_context->SwapBuffers();

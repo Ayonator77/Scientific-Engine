@@ -72,5 +72,31 @@ void SphSolver::SetupBuffers() {
 }
 
 void SphSolver::Update(float dt){
-    //TODO: write the gpu dispatch code here once GLSL shader is written.
+    // Prevent physical explosions on lag spikes
+    if(dt > 0.02f) dt = 0.02f;
+
+    //Divide the gpu into workgroups of 256 threads
+    unsigned int num_groups = (m_params.particle_count + 255) /256;
+
+    // Pass 1: Density & Pressure
+    m_compute_density_pressure->Bind();
+    m_compute_density_pressure->SetInt("u_numParticles", m_params.particle_count);
+    m_compute_density_pressure->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
+    m_compute_density_pressure->SetFloat("u_targetDensity", m_params.target_density);
+    m_compute_density_pressure->SetFloat("u_pressureMultiplier", m_params.pressure_multiplier);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_SSBO);
+    m_compute_density_pressure->Dispatch(num_groups, 1, 1);
+    m_compute_density_pressure->Wait(); // STOP: Wait for all cores to finish before calculating force!
+
+    //Pass 2: Forces & Integration
+    m_compute_forces->Bind();
+    m_compute_forces->SetInt("u_numParticles", m_params.particle_count);
+    m_compute_forces->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
+    m_compute_forces->SetFloat("u_viscosity", m_params.viscosity);
+    m_compute_forces->SetFloat("u_gravity", m_params.gravity);
+    m_compute_forces->SetFloat("u_dt", dt);
+
+    m_compute_forces->Dispatch(num_groups, 1, 1);
+    m_compute_forces->Wait(); // STOP: Wait for integration before rendering
 }

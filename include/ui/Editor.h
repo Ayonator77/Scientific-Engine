@@ -3,6 +3,7 @@
 #include "core/PointLight.h"
 #include <SDL2/SDL.h>
 #include <vector>
+#include "physics/SphParams.h"
 
 /**
  * Output flags that the applicaiton reads each frame to act on UI events
@@ -11,6 +12,7 @@
 struct EditorOutput
  {
     bool planet_regen_requested = false;
+    bool sim_reset_requested = false;
  };
  
 
@@ -33,7 +35,8 @@ public:
    void EndFrame();
 
    //Build all panels. return flags for the application to act on
-   EditorOutput OnRender(PlanetParams& planetParams, std::vector<PointLight>& pointLights, float fps, int particle_count, float kinetic_energy);
+   EditorOutput OnRender(PlanetParams& planetParams, SphParams& sphParams, std::vector<PointLight>& pointLights, float fps, int particle_count, float kinetic_energy);
+   void RenderSimPanel(SphParams& params, EditorOutput& output, float kinetic_energy, int particle_count);
 
    //Query ImGui's capture state - suppress camera/game input when true
    bool WantsCaptureMouse() const;

@@ -16,6 +16,7 @@ public:
     //Getters for the Renderer
     unsigned int GetVAO() const { return m_VAO; }
     int GetParticleCount() const { return m_params.particle_count; }
+    SphParams& GetParams() { return m_params; }
 
 private:
     void InitializeParticles();

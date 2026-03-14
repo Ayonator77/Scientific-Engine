@@ -14,5 +14,5 @@ void main() {
     gl_Position = projection * viewPos;
 
     //Dynamically scale point size based on distance from the camera
-    gl_PointSize = 120 / -viewPos.z;
+    gl_PointSize = 45.0 / -viewPos.z;
 }
