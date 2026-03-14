@@ -1,6 +1,9 @@
 #include "physics/SphSolver.h"
 #include <glad/glad.h>
 #include <cmath>
+#include <algorithm>
+#include <iostream>
+#include <fstream>
 
 SphSolver::SphSolver(const SphParams& params) : m_params(params) {
     // Load the compute shaders (we will create these files next)
@@ -100,4 +103,72 @@ void SphSolver::Update(float dt){
 
     m_compute_forces->Dispatch(num_groups, 1, 1);
     m_compute_forces->Wait(); // STOP: Wait for integration before rendering
+}
+
+void SphSolver::LogGPUState() {
+    // 1. Tell OpenGL we want to read the SSBO
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_SSBO);
+    
+    // 2. Lock the GPU memory and get a CPU pointer
+    Particle* ptr = (Particle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+    
+    if (ptr) {
+        float maxVel = 0.0f;
+        float minDensity = 999999.0f;
+        float maxDensity = -999999.0f;
+        double totalKineticEnergy = 0.0;
+        int nanCount = 0;
+
+        // 3. Scan the macro state
+        for (int i = 0; i < m_params.particle_count; i++) {
+            float v = glm::length(glm::vec3(ptr[i].velocity));
+            if (std::isnan(v)) nanCount++;
+            
+            maxVel = std::max(maxVel, v);
+            
+            float d = ptr[i].position.w;
+            if (!std::isnan(d)) {
+                minDensity = std::min(minDensity, d);
+                maxDensity = std::max(maxDensity, d);
+            }
+            
+            totalKineticEnergy += 0.5 * ptr[i].force.w * (v * v);
+        }
+
+        // 4. Open a text file to dump the VRAM
+        std::ofstream file("gpu_vram_dump.txt");
+        if (file.is_open()) {
+            file << "=== SPH GPU MEMORY DIAGNOSTIC ===\n";
+            file << "Total Particles: " << m_params.particle_count << "\n";
+            file << "NaN (Corrupted) Particles: " << nanCount << "\n";
+            file << "Max Velocity: " << maxVel << " m/s\n";
+            file << "Density Range: [" << minDensity << ", " << maxDensity << "]\n";
+            file << "System Kinetic Energy: " << totalKineticEnergy << " J\n";
+            file << "=================================\n\n";
+            
+            file << "--- INDIVIDUAL PARTICLE DATA ---\n";
+            file << "Format: [Index] Pos(x,y,z) | Vel(x,y,z) | Density | Pressure\n";
+            
+            // Dump every single particle to the file
+            for (int i = 0; i < m_params.particle_count; i++) {
+                file << "[" << i << "] "
+                     << "P(" << ptr[i].position.x << ", " << ptr[i].position.y << ", " << ptr[i].position.z << ") | "
+                     << "V(" << ptr[i].velocity.x << ", " << ptr[i].velocity.y << ", " << ptr[i].velocity.z << ") | "
+                     << "D:" << ptr[i].position.w << " | "
+                     << "Pr:" << ptr[i].velocity.w << "\n";
+            }
+            
+            file.close();
+            std::cout << "[SUCCESS] VRAM successfully dumped to gpu_vram_dump.txt" << std::endl;
+        } else {
+            std::cout << "[ERROR] Could not open file for writing." << std::endl;
+        }
+
+        // 5. CRITICAL: Unlock the memory
+        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+    } else {
+        std::cout << "[ERROR] Failed to map GPU memory.\n";
+    }
+    
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }

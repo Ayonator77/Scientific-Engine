@@ -13,6 +13,7 @@ struct EditorOutput
  {
     bool planet_regen_requested = false;
     bool sim_reset_requested = false;
+    bool debug_log_requested = false;
  };
  
 
@@ -50,7 +51,7 @@ private:
    void RenderMenuBar();
    void RenderPlanetPanel(PlanetParams& planetParams, EditorOutput& output);
    void RenderLightsPanel(std::vector<PointLight>& pointLights);
-   void RenderSimPanel(float kinetic_energy, int particle_count);
+   //void RenderSimPanel(float kinetic_energy, int particle_count);
    void RenderStatsBar(float fps, int particle_count);
 
    bool m_first_frame = true;

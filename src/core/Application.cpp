@@ -93,6 +93,10 @@ void Application::run() {
             m_scene->GetSphSolver().Reset();
         }
 
+        if(out.debug_log_requested){
+            m_scene->GetSphSolver().LogGPUState();
+        }
+
         m_context->SwapBuffers();
     }
 }

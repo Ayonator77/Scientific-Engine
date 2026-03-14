@@ -12,6 +12,7 @@ public:
 
     void Update(float dt);
     void Reset();
+    void LogGPUState();
 
     //Getters for the Renderer
     unsigned int GetVAO() const { return m_VAO; }

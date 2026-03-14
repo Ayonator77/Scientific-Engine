@@ -50,5 +50,6 @@ void main() {
     particles[i].position.w = density;
 
     //calculate and write internal pressure (Equation of State)
-    particles[i].velocity.w = u_pressureMultiplier * (density - u_targetDensity);
+    float p = u_pressureMultiplier * (density - u_targetDensity);
+    particles[i].velocity.w = max(p, 0.0);
 }

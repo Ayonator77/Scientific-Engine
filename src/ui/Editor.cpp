@@ -292,12 +292,12 @@ void Editor::RenderSimPanel(SphParams& params, EditorOutput& output, float kinet
     ImGui::SliderInt("Spawn Count", &params.particle_count, 1000, 60000); 
     ImGui::SliderFloat("Radius", &params.smoothing_radius, 0.05f, 0.5f, "%.3f");
     ImGui::SliderFloat("Target Density", &params.target_density, 100.0f, 2000.0f, "%.1f");
-    ImGui::SliderFloat("Pressure", &params.pressure_multiplier, 10.0f, 2000.0f, "%.1f");
+    ImGui::SliderFloat("Pressure", &params.pressure_multiplier, 5.0f, 2000.0f, "%.1f");
     ImGui::SliderFloat("Viscosity", &params.viscosity, 0.00f, 0.2f, "%.3f");
     ImGui::SliderFloat("Gravity", &params.gravity, -20.0f, 0.0f, "%.2f");
     // Add Collision Damping
     ImGui::SliderFloat("Wall Damping", &params.collision_damping, 0.1f, 1.0f, "%.2f");
-    
+
     ImGui::Spacing();
     ImGui::SeparatorText("State");
     ImGui::Text("Particles:      %d", particleCount);
@@ -309,6 +309,15 @@ void Editor::RenderSimPanel(SphParams& params, EditorOutput& output, float kinet
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.30f, 0.70f, 0.30f, 1.0f));
     if (ImGui::Button("Drop Water", ImVec2(-1.0f, 0.0f))) {
         output.sim_reset_requested = true;
+    }
+    ImGui::PopStyleColor(3);
+
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.45f, 0.18f, 0.18f, 1.0f)); // Red button
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.58f, 0.24f, 0.24f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.70f, 0.30f, 0.30f, 1.0f));
+    if (ImGui::Button("Log GPU State to Console", ImVec2(-1.0f, 0.0f))) {
+        output.debug_log_requested = true;
     }
     ImGui::PopStyleColor(3);
 
