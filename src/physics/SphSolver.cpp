@@ -27,7 +27,7 @@ void SphSolver::InitializeParticles() {
     m_particles.clear();
 
     //calculate how many particles fit on one side of a 3D cube
-    int side = static_cast<int>(std::cbrt(m_params.particle_count));
+    int side = static_cast<int>(std::cbrt(m_params.spawn_count));
     float spacing = m_params.smoothing_radius * 0.5f;
     float offset = (side * spacing) / 2.0f;
 
@@ -47,7 +47,7 @@ void SphSolver::InitializeParticles() {
         }
     }
     //Update count in case the cube root truncated the original requested ammount
-    m_params.particle_count = static_cast<int>(m_particles.size());
+    m_params.active_particle_count = static_cast<int>(m_particles.size());
 }   
 
 void SphSolver::SetupBuffers() {
@@ -74,35 +74,40 @@ void SphSolver::SetupBuffers() {
 
 }
 
-void SphSolver::Update(float dt){
-    // Prevent physical explosions on lag spikes
-    if(dt > 0.02f) dt = 0.02f;
+void SphSolver::Update(float dt) {
+    if (dt > 0.02f) dt = 0.02f;
 
-    //Divide the gpu into workgroups of 256 threads
-    unsigned int num_groups = (m_params.particle_count + 255) /256;
+    // Sub-stepping: slice the frame into 4 smaller, highly stable physics steps
+    const int SUB_STEPS = 4;
+    float sub_dt = dt / static_cast<float>(SUB_STEPS);
+    
+    // The GPU ONLY reads the active, perfectly cubic particle count
+    unsigned int num_groups = (m_params.active_particle_count + 255) / 256;
 
-    // Pass 1: Density & Pressure
-    m_compute_density_pressure->Bind();
-    m_compute_density_pressure->SetInt("u_numParticles", m_params.particle_count);
-    m_compute_density_pressure->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
-    m_compute_density_pressure->SetFloat("u_targetDensity", m_params.target_density);
-    m_compute_density_pressure->SetFloat("u_pressureMultiplier", m_params.pressure_multiplier);
+    for (int step = 0; step < SUB_STEPS; step++) {
+        // ----- PASS 1: Density & Pressure -----
+        m_compute_density_pressure->Bind();
+        m_compute_density_pressure->SetInt("u_numParticles", m_params.active_particle_count);
+        m_compute_density_pressure->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
+        m_compute_density_pressure->SetFloat("u_targetDensity", m_params.target_density);
+        m_compute_density_pressure->SetFloat("u_pressureMultiplier", m_params.pressure_multiplier);
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_SSBO);
-    m_compute_density_pressure->Dispatch(num_groups, 1, 1);
-    m_compute_density_pressure->Wait(); // STOP: Wait for all cores to finish before calculating force!
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_SSBO);
+        m_compute_density_pressure->Dispatch(num_groups, 1, 1);
+        m_compute_density_pressure->Wait();
 
-    //Pass 2: Forces & Integration
-    m_compute_forces->Bind();
-    m_compute_forces->SetInt("u_numParticles", m_params.particle_count);
-    m_compute_forces->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
-    m_compute_forces->SetFloat("u_viscosity", m_params.viscosity);
-    m_compute_forces->SetFloat("u_gravity", m_params.gravity);
-    m_compute_forces->SetFloat("u_collisionDamping", m_params.collision_damping);
-    m_compute_forces->SetFloat("u_dt", dt);
+        // ----- PASS 2: Forces & Integration -----
+        m_compute_forces->Bind();
+        m_compute_forces->SetInt("u_numParticles", m_params.active_particle_count);
+        m_compute_forces->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
+        m_compute_forces->SetFloat("u_viscosity", m_params.viscosity);
+        m_compute_forces->SetFloat("u_gravity", m_params.gravity);
+        m_compute_forces->SetFloat("u_collisionDamping", m_params.collision_damping);
+        m_compute_forces->SetFloat("u_dt", sub_dt); // Pass the micro-dt!
 
-    m_compute_forces->Dispatch(num_groups, 1, 1);
-    m_compute_forces->Wait(); // STOP: Wait for integration before rendering
+        m_compute_forces->Dispatch(num_groups, 1, 1);
+        m_compute_forces->Wait();
+    }
 }
 
 void SphSolver::LogGPUState() {
@@ -120,7 +125,7 @@ void SphSolver::LogGPUState() {
         int nanCount = 0;
 
         // 3. Scan the macro state
-        for (int i = 0; i < m_params.particle_count; i++) {
+        for (int i = 0; i < m_params.active_particle_count; i++) {
             float v = glm::length(glm::vec3(ptr[i].velocity));
             if (std::isnan(v)) nanCount++;
             
@@ -139,7 +144,7 @@ void SphSolver::LogGPUState() {
         std::ofstream file("gpu_vram_dump.txt");
         if (file.is_open()) {
             file << "=== SPH GPU MEMORY DIAGNOSTIC ===\n";
-            file << "Total Particles: " << m_params.particle_count << "\n";
+            file << "Total Particles: " << m_params.active_particle_count << "\n";
             file << "NaN (Corrupted) Particles: " << nanCount << "\n";
             file << "Max Velocity: " << maxVel << " m/s\n";
             file << "Density Range: [" << minDensity << ", " << maxDensity << "]\n";
@@ -150,7 +155,7 @@ void SphSolver::LogGPUState() {
             file << "Format: [Index] Pos(x,y,z) | Vel(x,y,z) | Density | Pressure\n";
             
             // Dump every single particle to the file
-            for (int i = 0; i < m_params.particle_count; i++) {
+            for (int i = 0; i < m_params.active_particle_count; i++) {
                 file << "[" << i << "] "
                      << "P(" << ptr[i].position.x << ", " << ptr[i].position.y << ", " << ptr[i].position.z << ") | "
                      << "V(" << ptr[i].velocity.x << ", " << ptr[i].velocity.y << ", " << ptr[i].velocity.z << ") | "
