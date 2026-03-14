@@ -5,6 +5,7 @@
 #include "core/PointLight.h"
 #include <vector>
 #include <memory>
+#include "physics/SphSolver.h"
 
 class Scene {
 public:
@@ -20,6 +21,7 @@ public:
     // Getters
     Camera& GetCamera() { return m_camera; }
     PlanetParams& GetPlanetParams() { return m_planet_params; }
+    SphSolver& GetSphSolver() { return *m_sph_solver; }
     std::vector<PointLight>& GetLights() { return m_lights; }
     std::unique_ptr<Icosahedron>& GetPlanet() { return m_planet; }
 
@@ -29,5 +31,6 @@ private:
     PlanetParams m_planet_params;
     std::vector<PointLight> m_lights;
     std::unique_ptr<Icosahedron> m_planet;
+    std::unique_ptr<SphSolver> m_sph_solver;
 
 };

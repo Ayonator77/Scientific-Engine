@@ -53,7 +53,6 @@ void Application::ProcessInput() {
 }
 
 
-
 void Application::run() {
     Uint64 now = SDL_GetPerformanceCounter();
     Uint64 last = now;
@@ -68,20 +67,33 @@ void Application::run() {
         // Input Phase
         ProcessInput();
 
-        //Render Phase
+        // Physics Phase
+        m_scene->GetSphSolver().Update(dt);
+
+        // Render Phase
         m_renderer->Clear();
         if (m_scene->GetPlanet()) {
             m_renderer->DrawPlanet(*m_scene->GetPlanet(), m_scene->GetCamera(), m_scene->GetLights());
         }
+
+        m_renderer->DrawParticle(m_scene->GetSphSolver().GetVAO(), m_scene->GetSphSolver().GetParticleCount(), m_scene->GetCamera());
         m_renderer->DrawLightBillboard(m_scene->GetCamera(), m_scene->GetLights());
 
         // UI Phase
         m_editor->BeginFrame();
-        EditorOutput out = m_editor->OnRender(m_scene->GetPlanetParams(), m_scene->GetLights(), fps, 0, 0.0f);
+        EditorOutput out = m_editor->OnRender(m_scene->GetPlanetParams(), m_scene->GetSphSolver().GetParams(), m_scene->GetLights(), fps, m_scene->GetSphSolver().GetParticleCount(), 0.0f);
         m_editor->EndFrame();
-
+ 
         if (out.planet_regen_requested) {
             m_scene->RegeneratePlanet();
+        }
+
+        if(out.sim_reset_requested){
+            m_scene->GetSphSolver().Reset();
+        }
+
+        if(out.debug_log_requested){
+            m_scene->GetSphSolver().LogGPUState();
         }
 
         m_context->SwapBuffers();

@@ -20,9 +20,11 @@ public:
 
     void DrawPlanet(const Icosahedron& planet, const Camera& camera, const std::vector<PointLight>& lights) const;
     void DrawLightBillboard(const Camera& camera, const std::vector<PointLight>& lights);
+    void DrawParticle(unsigned int vao, int particle_count,  const Camera& camera);
 
 private:
     std::unique_ptr<Shader> m_planet_shader;
     std::unique_ptr<Shader> m_light_shader;
+    std::unique_ptr<Shader> m_particle_shader;
     unsigned int m_dummy_VAO = 0;
 };

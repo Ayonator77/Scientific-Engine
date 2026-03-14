@@ -1,0 +1,54 @@
+#version 460 core
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+struct Particle {
+    vec4 position; // xyz = position, w = density
+    vec4 velocity; // xyz = velocity, w = pressure
+    vec4 force;    // xyz = force,    w = mass
+};
+
+layout(std430, binding = 0) buffer ParticleBuffer{
+    Particle particles[];
+};
+
+uniform int u_numParticles;
+uniform float u_smoothingRadius;
+uniform float u_targetDensity;
+uniform float u_pressureMultiplier;
+
+const float PI = 3.14159265359;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if( i >= u_numParticles) return;
+
+    vec3 pos = particles[i].position.xyz;
+    float mass = particles[i].force.w;
+    float h = u_smoothingRadius;
+    float h2 = h * h;
+
+    float density = 0.0;
+
+    //Poly6 Kernal calculation
+    float poly6_constant = 315.0 / (64.0 * PI * pow(h, 9.0));
+
+    //O(N^2) Brute force neighborhood search
+    for(int j =0; j< u_numParticles; j++){
+        vec3 diff = pos - particles[j].position.xyz;
+        float r2 = dot(diff, diff);
+        if (r2 < h2){
+            float val = h2 - r2;
+            density += mass * poly6_constant * val * val * val;
+        }
+    }
+
+    //prevent density from hitting 0
+    density = max(density, 0.0001);
+
+    //write back to SSB0
+    particles[i].position.w = density;
+
+    //calculate and write internal pressure (Equation of State)
+    float p = u_pressureMultiplier * (density - u_targetDensity);
+    particles[i].velocity.w = max(p, 0.0);
+}
