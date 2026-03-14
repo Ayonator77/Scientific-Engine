@@ -2,97 +2,101 @@
 
 > A real-time procedural planet generator and GPU-accelerated fluid simulator, built from scratch.
 
-I'm Ayodeji. I built this engine because I'm fascinated by the intersection of mathematics, graphics programming, and low-level systems work. Rather than using Unity or Unreal, I wanted to build the rendering pipeline from the ground up — from GLSL shaders and GPU buffer management to procedural geometry, compute-shader physics, and a custom editor.
+I'm Ayodeji. I built this engine because I'm fascinated by the intersection of mathematics, graphics programming, and low-level systems work. Rather than using Unity or Unreal, I wanted to build the rendering pipeline from the ground up — from GLSL shaders and GPU buffer management to procedural geometry, compute-based physics, and a custom editor.
 
 ---
 
 ## What It Does
 
-The engine generates procedural planets in real-time and simulates fluid dynamics using Smoothed Particle Hydrodynamics (SPH) entirely on the GPU, with an interactive editor for tweaking all parameters live.
+The engine generates procedural planets and runs a Smoothed Particle Hydrodynamics (SPH) fluid simulation on the GPU, all in real-time with an interactive editor.
 
 ### Procedural Planet Generation
 
-Planets start as an icosahedron (12 vertices, 20 faces) whose vertices are derived from three mutually perpendicular golden rectangles using the golden ratio φ = (1 + √5) / 2. The mesh is subdivided iteratively — each triangle is split into four by inserting edge midpoints — with an edge cache to prevent duplicate vertices. All midpoints are re-projected onto the unit sphere. After `n` subdivisions the mesh contains 20 × 4ⁿ triangles.
+Planets start as an icosahedron defined by the golden ratio φ = (1+√5)/2. The 12 base vertices are subdivided using edge-midpoint caching — each pass splits every triangle into four by inserting normalized midpoints on each edge, projecting them onto the unit sphere. At subdivision level 6, this produces 81,920 triangles and 40,962 vertices.
 
-### Terrain Noise
-
-Topography is sculpted using **Ridged Multifractal noise** built on 3D Simplex noise. Each octave applies a ridge transform (`(1 − |noise|)²`) with weight feedback from the previous octave, producing sharp mountain ridges that suppress detail in lowlands. Frequency doubles and amplitude halves per octave (lacunarity = 2, gain = 0.5). A sea-level clamp flattens ocean floors. All generation is seeded via a deterministic offset in the noise sample space, so a given seed reproduces the same planet.
+Terrain is sculpted using **Ridged Multifractal Noise**: 3D Simplex noise is passed through a ridge transform `(1 - |noise|)²` and layered across multiple octaves with frequency doubling and amplitude halving. A weight-feedback loop makes higher elevations accumulate more detail, producing realistic mountain-on-mountain terrain. All generation is seeded for deterministic reproduction. A sea-level floor flattens low elevations into oceans.
 
 ### GPU Fluid Simulation (SPH)
 
-A Smoothed Particle Hydrodynamics solver runs entirely in two OpenGL 4.6 compute shader passes per sub-step:
+A Smoothed Particle Hydrodynamics solver runs entirely on the GPU via OpenGL 4.6 compute shaders. Up to 8,000+ particles simulate incompressible fluid dynamics in a two-pass pipeline:
 
-1. **Density & Pressure** — computes per-particle density using the Poly6 kernel (W = 315/64πh⁹ · (h² − r²)³), then derives pressure from a linearized equation of state (p = k(ρ − ρ₀)).
-2. **Forces & Integration** — accumulates pressure gradient forces (Spiky kernel gradient), viscosity forces (viscosity kernel Laplacian), and gravity, then integrates via semi-implicit Euler with sub-stepping and artificial damping. Boundary collisions use axis-aligned box clamping with configurable restitution.
+1. **Density & Pressure Pass** (`sph_density.comp`) — computes per-particle density using the Poly6 smoothing kernel, then derives pressure from the Tait equation of state.
+2. **Forces & Integration Pass** (`sph_forces.comp`) — computes pressure gradient forces (Spiky kernel), viscosity forces (viscosity kernel Laplacian), and gravity. Integrates using semi-implicit Euler with velocity damping and box-boundary collision.
 
-Particles are stored in a single SSBO that is simultaneously bound as a compute storage buffer (binding 0) and a vertex attribute array — zero-copy rendering with no CPU–GPU transfer.
+The particle buffer lives in a single SSBO that is dual-bound as both a compute storage buffer and a vertex attribute buffer — the vertex shader reads directly from the same VRAM the compute shaders write to, with zero CPU readback.
 
-### Rendering
+### Lighting & Shading
 
-- **Planet**: Lambertian diffuse shading with multiple point lights using inverse-square attenuation. Normals are transformed via the inverse-transpose of the model matrix.
-- **Lights**: Rendered as point-sprite billboards with soft glow falloff (smoothstep) and a selection ring.
-- **Particles**: Point sprites with density-mapped coloring (deep blue → cyan) and perspective-correct size scaling (pointSize ∝ 1/viewZ).
+Lambertian diffuse shading with inverse-square attenuation supports up to 8 dynamic point lights. Lights are rendered as GPU point sprites with circular billboard fragment shading and selection-ring overlays. Lights are pickable via mouse ray-casting (ray-sphere intersection in NDC → world space) and draggable along the camera's view-plane axes.
 
-### Interaction
+### Particle Visualization
 
-- **Orbit camera** using spherical coordinates (radius, pitch, yaw) with scroll-to-zoom and pitch clamping.
-- **3D light picking** via analytic ray-sphere intersection (ray constructed by unprojecting NDC through inverse projection and view matrices).
-- **Light dragging** in the camera's view plane using extracted right/up vectors from the view matrix.
+Particles are rendered as point sprites with density-mapped coloring — low-pressure regions render deep blue, high-pressure regions render white-cyan. Point size scales inversely with camera distance for depth perception.
 
 ### Editor
 
-An integrated Dear ImGui (docking branch) panel provides real-time telemetry (FPS, frame times), mesh stats, fluid simulation parameter sliders (smoothing radius, target density, pressure, viscosity, gravity, wall damping), planet regeneration controls, light management (add, delete, color, intensity, position), and a GPU state diagnostic dump.
-
----
-
-## Tech Stack
-
-| Component     | Choice                           |
-|---------------|----------------------------------|
-| Language      | C++20                            |
-| Graphics API  | OpenGL 4.6 (Core Profile)        |
-| Windowing     | SDL2                             |
-| Math          | GLM                              |
-| UI            | Dear ImGui (Docking Branch)      |
-| Build         | CMake + vcpkg                    |
+An integrated Dear ImGui (docking branch) editor provides:
+- Planet controls: seed, subdivision level, noise amplitude/frequency/octaves, sea level
+- Fluid controls: particle count, smoothing radius, target density, pressure, viscosity, gravity, wall damping
+- Light management: add/remove/select lights, drag position, color picker, intensity
+- Stats bar: FPS, particle count, OpenGL version
+- GPU diagnostic: dumps full VRAM particle state (position, velocity, density, pressure) to file for debugging
 
 ---
 
 ## Architecture
 
 ```
-Application          — owns SDL/GL context, main loop, frame timing
-├── GraphicsContext   — SDL window + OpenGL 4.6 core profile init
-├── Input            — per-frame keyboard/mouse state polling
-├── Scene            — camera, lights, planet, SPH solver
-│   ├── Camera       — spherical orbit camera
-│   ├── Icosahedron  — procedural mesh (subdivide, noise, normals, GL buffers)
-│   ├── SphSolver    — GPU compute dispatch, SSBO management, sub-stepping
-│   └── PointLight[] — position, color, intensity, selection state
-├── Renderer         — shader programs, draw calls (planet, lights, particles)
-└── Editor           — ImGui lifecycle, dockspace, panels, output flags
+Application (main loop owner)
+├── GraphicsContext     — SDL2 window + OpenGL 4.6 core context
+├── Input              — SDL keyboard/mouse polling
+├── Renderer           — stateless draw calls (planet, lights, particles)
+├── Editor             — ImGui lifecycle + all UI panels
+└── Scene              — owns all world state
+    ├── Camera         — orbital (spherical coordinates)
+    ├── Icosahedron    — procedural planet mesh
+    ├── PointLight[]   — dynamic lights with ray-pick selection
+    └── SphSolver      — GPU fluid simulation
+        ├── sph_density.comp   — Poly6 density + equation of state
+        └── sph_forces.comp    — Spiky pressure + viscosity + Euler integration
 ```
 
-The editor communicates with the application through a plain `EditorOutput` struct (flags for planet regen, sim reset, debug log), keeping UI completely decoupled from engine objects.
+The frame loop executes four phases: **Input → Physics → Render → UI**. The `Scene` owns all simulation state; the `Renderer` is stateless and receives everything it needs per call. GPU resources (VAOs, SSBOs, shader programs) are protected by deleted copy constructors — only move semantics are permitted.
+
+---
+
+## Tech Stack
+
+| Component     | Choice                                |
+|---------------|---------------------------------------|
+| Language      | C++20                                 |
+| Graphics API  | OpenGL 4.6 (Core Profile)             |
+| GPU Compute   | OpenGL Compute Shaders (GLSL 460)     |
+| Windowing     | SDL2                                  |
+| Math          | GLM                                   |
+| UI            | Dear ImGui (Docking Branch)           |
+| Build         | CMake + vcpkg                         |
+| Testing       | Google Test                           |
+| Logging       | spdlog                                |
 
 ---
 
 ## Directory Structure
 
 ```
-├── assets/shaders/
-│   ├── planet.vert / planet.frag    — icosahedron rendering (Lambertian diffuse)
-│   ├── light.vert / light.frag      — point-sprite light billboards
-│   ├── particle.vert / particle.frag — SPH particle rendering
-│   ├── sph_density.comp             — compute: Poly6 density + equation of state
-│   └── sph_forces.comp              — compute: Spiky pressure + viscosity + Euler integration
+├── assets/shaders/         # GLSL shaders (vertex, fragment, compute)
+│   ├── planet.vert/frag    # Planet mesh rendering + Lambertian lighting
+│   ├── light.vert/frag     # Point sprite light billboards
+│   ├── particle.vert/frag  # SPH particle rendering (density-mapped color)
+│   ├── sph_density.comp    # Compute: Poly6 density + pressure EOS
+│   └── sph_forces.comp     # Compute: Spiky/viscosity forces + Euler integration
 ├── include/
-│   ├── core/       — Application, Camera, Shader, ComputeShader, Renderer, Scene, Input, GraphicsContext
-│   ├── geometry/   — Icosahedron
-│   ├── physics/    — Particle, SphParams, SphSolver
-│   └── ui/         — Editor
-├── src/            — implementations mirroring include/ layout
-└── tests/          — Google Test suite
+│   ├── core/               # Application, Camera, Shader, ComputeShader, Renderer, etc.
+│   ├── geometry/           # Icosahedron (procedural mesh)
+│   ├── physics/            # Particle, SphParams, SphSolver
+│   └── ui/                 # Editor (ImGui panels)
+├── src/                    # Implementation files (mirrors include/ layout)
+└── tests/                  # Google Test suite
 ```
 
 ---
@@ -101,45 +105,83 @@ The editor communicates with the application through a plain `EditorOutput` stru
 
 **Prerequisites:** Visual Studio 2022+ (MSVC), CMake ≥ 3.20, Git, vcpkg
 
-```
+```bash
 git clone https://github.com/Ayonator77/Scientific-Engine.git
 cd Scientific-Engine
 .\run.bat
 ```
 
-The build system uses vcpkg for dependency management (SDL2, GLAD, GLM, spdlog, GTest) and fetches ImGui's docking branch via CMake FetchContent. No prebuilt binaries are stored in the repo. `run.bat` auto-configures on first run and builds/executes in Debug mode.
+The build system uses vcpkg for dependency management (SDL2, GLAD, GLM, spdlog, Google Test) and fetches ImGui's docking branch via CMake's FetchContent. No prebuilt binaries are stored in the repo.
+
+**Manual build:**
+```bash
+cmake --preset msvc
+cmake --build build/vs2026 --config Debug --target run
+```
+
+---
+
+## SPH Math Reference
+
+The fluid simulation implements the Navier-Stokes equations discretized over particles:
+
+**Density estimation** (Poly6 kernel):
+```
+ρᵢ = Σⱼ mⱼ · W_poly6(‖rᵢ - rⱼ‖, h)
+W_poly6(r, h) = (315 / 64πh⁹) · (h² - r²)³    for r < h
+```
+
+**Pressure** (Tait equation of state):
+```
+pᵢ = k · (ρᵢ - ρ₀)
+```
+
+**Pressure force** (Spiky kernel gradient):
+```
+Fᵢ_pressure = -Σⱼ mⱼ · (pᵢ + pⱼ)/(2ρⱼ) · ∇W_spiky
+∇W_spiky(r, h) = -(45/πh⁶) · (h - r)² · (r̂/r)
+```
+
+**Viscosity force** (Laplacian kernel):
+```
+Fᵢ_visc = μ · Σⱼ mⱼ · (vⱼ - vᵢ)/ρⱼ · ∇²W_visc
+∇²W_visc(r, h) = (45/πh⁶) · (h - r)
+```
+
+**Integration** (semi-implicit Euler with damping):
+```
+v += a · dt
+v *= 0.995          (energy bleed for stability)
+x += v · dt
+```
 
 ---
 
 ## Project Status
 
-### Working
+This is an active prototype. The planetary generation pipeline, SPH fluid simulation, and editor are functional.
 
+**What's working:**
 - Procedural planet generation with seeded, deterministic output
-- Icosahedral subdivision with edge midpoint caching
-- Ridged Multifractal noise terrain displacement with domain-varied seed offsets
-- Smooth vertex normals (area-weighted accumulation)
-- Multi-light Lambertian diffuse shading with inverse-square attenuation
-- Point-sprite light billboards with selection ring and soft glow
-- 3D ray-cast light picking and view-plane dragging
-- GPU SPH fluid simulation (Poly6 density, Spiky pressure gradient, viscosity Laplacian)
-- Semi-implicit Euler integration with sub-stepping and artificial damping
-- Zero-copy SSBO → vertex attribute particle rendering
-- Density-mapped particle coloring with perspective-correct point sizes
-- ImGui docking editor with planet, lights, simulation, and stats panels
-- GPU VRAM diagnostic dump to file
+- Icosahedral subdivision with edge caching (up to 327k triangles)
+- Ridged multifractal noise terrain with weight-feedback octaves
+- GPU-accelerated SPH fluid simulation (two-pass compute pipeline)
+- Dual SSBO/VBO binding for zero-copy particle rendering
+- Density-mapped particle coloring with distance-scaled point sprites
+- Lambertian diffuse shading with up to 8 dynamic point lights
+- Interactive point lights with ray-cast picking and drag movement
+- ImGui docking editor with planet, fluid, and light controls
+- GPU VRAM diagnostic dump for debugging simulation instability
 
-### In Progress
-
-- Extracting rendering, input, and planet construction into dedicated subsystems
-- Unit tests for geometry math, subdivision, and deterministic seed output
+**What's in progress:**
+- Spatial hashing for O(N) neighbor search (currently O(N²) brute force)
+- Elevation-based biome fragment shading
 - Shader loader hardening (fail-fast on missing files)
 
-### Planned
-
-- Spatial hashing for O(n) neighbor search (replacing O(n²) brute force)
+**What's planned:**
 - N-Body orbital mechanics (Verlet/RK4 integration)
 - General relativity visualization experiments
+- Particle LOD and adaptive timestep
 
 ---
 
