@@ -95,6 +95,7 @@ void SphSolver::Update(float dt){
     m_compute_forces->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
     m_compute_forces->SetFloat("u_viscosity", m_params.viscosity);
     m_compute_forces->SetFloat("u_gravity", m_params.gravity);
+    m_compute_forces->SetFloat("u_collisionDamping", m_params.collision_damping);
     m_compute_forces->SetFloat("u_dt", dt);
 
     m_compute_forces->Dispatch(num_groups, 1, 1);

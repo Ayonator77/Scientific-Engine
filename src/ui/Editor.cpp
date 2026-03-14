@@ -288,12 +288,16 @@ void Editor::RenderSimPanel(SphParams& params, EditorOutput& output, float kinet
     ImGui::Begin("Simulation");
 
     ImGui::SeparatorText("Fluid Properties");
+    // Add Spawn Count (it will take effect when they hit Drop Water)
+    ImGui::SliderInt("Spawn Count", &params.particle_count, 1000, 60000); 
     ImGui::SliderFloat("Radius", &params.smoothing_radius, 0.05f, 0.5f, "%.3f");
     ImGui::SliderFloat("Target Density", &params.target_density, 100.0f, 2000.0f, "%.1f");
     ImGui::SliderFloat("Pressure", &params.pressure_multiplier, 10.0f, 2000.0f, "%.1f");
     ImGui::SliderFloat("Viscosity", &params.viscosity, 0.00f, 0.2f, "%.3f");
     ImGui::SliderFloat("Gravity", &params.gravity, -20.0f, 0.0f, "%.2f");
-
+    // Add Collision Damping
+    ImGui::SliderFloat("Wall Damping", &params.collision_damping, 0.1f, 1.0f, "%.2f");
+    
     ImGui::Spacing();
     ImGui::SeparatorText("State");
     ImGui::Text("Particles:      %d", particleCount);
