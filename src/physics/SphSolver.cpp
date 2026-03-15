@@ -8,6 +8,7 @@
 SphSolver::SphSolver(const SphParams& params) : m_params(params) {
     m_compute_spatial_hash = std::make_unique<ComputeShader>("assets/shaders/sph_hash.comp");
     m_compute_bitonic_sort = std::make_unique<ComputeShader>("assets/shaders/sph_sort.comp");
+    m_compute_spatial_offsets = std::make_unique<ComputeShader>("assets/shaders/sph_offsets.comp");
     m_compute_density_pressure = std::make_unique<ComputeShader>("assets/shaders/sph_density.comp");
     m_compute_forces = std::make_unique<ComputeShader>("assets/shaders/sph_forces.comp");
     Reset();
@@ -120,13 +121,25 @@ void SphSolver::Update(float dt) {
     // Sub-stepping: slice the frame into 2 smaller, highly stable physics steps
     const int SUB_STEPS = 2;
     float sub_dt = dt / static_cast<float>(SUB_STEPS);
-    
+    // 0C: Clear the Offsets Buffer
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_spatial_offsetSSBO);
+    unsigned int clearVal = 0xFFFFFFFF; // 0xFFFFFFFF means "Empty Cell"
+    glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &clearVal);
+
     // The GPU ONLY reads the active, perfectly cubic particle count
     unsigned int num_groups = (m_params.active_particle_count + 255) / 256;
+    
+    // 0D: Offset Pass
+    m_compute_spatial_offsets->Bind();
+    m_compute_spatial_offsets->SetInt("u_numParticles", m_params.active_particle_count);
+    m_compute_spatial_offsets->Dispatch(num_groups, 1, 1);
+    m_compute_spatial_offsets->Wait();
+    
 
     for (int step = 0; step < SUB_STEPS; step++) {
         // ----- PASS 1: Density & Pressure -----
         m_compute_density_pressure->Bind();
+        m_compute_density_pressure->SetInt("u_tableSize", m_params.spatial_grid_size);
         m_compute_density_pressure->SetInt("u_numParticles", m_params.active_particle_count);
         m_compute_density_pressure->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
         m_compute_density_pressure->SetFloat("u_targetDensity", m_params.target_density);
@@ -138,6 +151,7 @@ void SphSolver::Update(float dt) {
 
         // ----- PASS 2: Forces & Integration -----
         m_compute_forces->Bind();
+        m_compute_forces->SetInt("u_tableSize", m_params.spatial_grid_size);
         m_compute_forces->SetInt("u_numParticles", m_params.active_particle_count);
         m_compute_forces->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
         m_compute_forces->SetFloat("u_viscosity", m_params.viscosity);
