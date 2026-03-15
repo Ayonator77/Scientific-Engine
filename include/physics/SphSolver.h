@@ -28,9 +28,13 @@ private:
 
     unsigned int m_VAO = 0;
     unsigned int m_SSBO = 0;
+    unsigned int m_spatial_indicesSSBO = 0; //Holds <Hash, ParticleIndex> pairs
+    unsigned int m_spatial_offsetSSBO = 0; //Holds start index for each cell
 
-    //SPH requires two distinct math passes.
-    // You cannot calculate force until every particle knows its neighbor's density.
+    // 4-pass compute pipline
     std::unique_ptr<ComputeShader> m_compute_density_pressure;
     std::unique_ptr<ComputeShader> m_compute_forces;
+    std::unique_ptr<ComputeShader> m_compute_spatial_hash;
+    std::unique_ptr<ComputeShader> m_compute_bitonic_sort;
+    std::unique_ptr<ComputeShader> m_compute_spatial_offsets;
 };

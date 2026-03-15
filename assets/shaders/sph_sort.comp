@@ -1,0 +1,31 @@
+#version 460 core
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 1) buffer SpatialIndices {
+    uvec2 indices[];
+};
+
+uniform uint u_k;
+uniform uint u_j;
+uniform uint u_numElements; 
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= u_numElements) return;
+
+    uint ixj = i ^ u_j;
+
+    // Only compare if i < ixj to prevent threads from double-swapping the same pair
+    if (ixj > i) {
+        bool ascending = (i & u_k) == 0;
+        
+        uvec2 a = indices[i];
+        uvec2 b = indices[ixj];
+
+        // Compare the Hash IDs (the .x component)
+        if ((a.x > b.x) == ascending) {
+            indices[i] = b;
+            indices[ixj] = a;
+        }
+    }
+}

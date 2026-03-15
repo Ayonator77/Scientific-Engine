@@ -6,7 +6,8 @@
 #include <fstream>
 
 SphSolver::SphSolver(const SphParams& params) : m_params(params) {
-    // Load the compute shaders (we will create these files next)
+    m_compute_spatial_hash = std::make_unique<ComputeShader>("assets/shaders/sph_hash.comp");
+    m_compute_bitonic_sort = std::make_unique<ComputeShader>("assets/shaders/sph_sort.comp");
     m_compute_density_pressure = std::make_unique<ComputeShader>("assets/shaders/sph_density.comp");
     m_compute_forces = std::make_unique<ComputeShader>("assets/shaders/sph_forces.comp");
     Reset();
@@ -15,6 +16,8 @@ SphSolver::SphSolver(const SphParams& params) : m_params(params) {
 SphSolver::~SphSolver() {
     if (m_VAO) glDeleteVertexArrays(1, &m_VAO);
     if (m_SSBO) glDeleteBuffers(1, &m_SSBO);
+    if (m_spatial_indicesSSBO) glDeleteBuffers(1, &m_spatial_indicesSSBO);
+    if (m_spatial_offsetSSBO) glDeleteBuffers(1, &m_spatial_offsetSSBO);
 }
 
 void SphSolver::Reset() {
@@ -50,22 +53,34 @@ void SphSolver::InitializeParticles() {
 }   
 
 void SphSolver::SetupBuffers() {
+// 1. Generate all buffers
     if (m_VAO == 0) glGenVertexArrays(1, &m_VAO);
     if (m_SSBO == 0) glGenBuffers(1, &m_SSBO);
+    if (m_spatial_indicesSSBO == 0) glGenBuffers(1, &m_spatial_indicesSSBO); 
+    if (m_spatial_offsetSSBO == 0) glGenBuffers(1, &m_spatial_offsetSSBO);
 
     glBindVertexArray(m_VAO);
 
-    // Create the SSBO and push the initial cpu grid into the gpu
+    // 2. The Main Particle Buffer (Binding 0)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_SSBO);
     glBufferData(GL_SHADER_STORAGE_BUFFER, m_particles.size() * sizeof(Particle), m_particles.data(), GL_DYNAMIC_DRAW);
-
-    // Bind it to Compute Shader Binding Point 0
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_SSBO);
 
-    // Bind it as an Array Buffer so the Vertex Shader can draw it
-    glBindBuffer(GL_ARRAY_BUFFER, m_SSBO);
+    // 3. The Spatial Indices Buffer (Binding 1)
+    // Needs to hold a uvec2 (8 bytes) for every particle: [Hash, OriginalIndex]
+    unsigned int sort_capacity = 65536; 
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_spatial_indicesSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sort_capacity * sizeof(unsigned int) * 2, nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_spatial_indicesSSBO);
 
-    // Map the particle.position (vec4) to Layout Location 0 in the vertex shader
+    // 4. The Spatial Offsets Buffer (Binding 2)
+    // Needs to hold one uint (4 bytes) for every grid cell in the universe
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_spatial_offsetSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, m_params.spatial_grid_size * sizeof(unsigned int), nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, m_spatial_offsetSSBO);
+
+    // 5. Setup the VAO for the Renderer
+    glBindBuffer(GL_ARRAY_BUFFER, m_SSBO);
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position));
     glEnableVertexAttribArray(0);
 
@@ -74,9 +89,35 @@ void SphSolver::SetupBuffers() {
 }
 
 void SphSolver::Update(float dt) {
-    if (dt > 0.02f) dt = 0.02f;
+    if (dt > 0.016f) dt = 0.016f; 
 
-    // Sub-stepping: slice the frame into 4 smaller, highly stable physics steps
+    // PASS 0 - SPATIAL HASHING & SORTING 
+    unsigned int sort_capacity = 65536; 
+    unsigned int hash_groups = (sort_capacity + 255) / 256;
+
+    // 0A: Hash Pass
+    m_compute_spatial_hash->Bind();
+    m_compute_spatial_hash->SetInt("u_numParticles", m_params.active_particle_count);
+    m_compute_spatial_hash->SetFloat("u_smoothingRadius", m_params.smoothing_radius);
+    m_compute_spatial_hash->SetInt("u_tableSize", m_params.spatial_grid_size);
+    m_compute_spatial_hash->Dispatch(hash_groups, 1, 1);
+    m_compute_spatial_hash->Wait();
+
+    // 0B: Bitonic Sort Pass
+    m_compute_bitonic_sort->Bind();
+    m_compute_bitonic_sort->SetInt("u_numElements", sort_capacity);
+    
+    // The recursive CPU dispatch loop required to execute a Bitonic Sort on the GPU
+    for (unsigned int k = 2; k <= sort_capacity; k <<= 1) {
+        for (unsigned int j = k >> 1; j > 0; j <<= 1) {
+            m_compute_bitonic_sort->SetInt("u_k", k);
+            m_compute_bitonic_sort->SetInt("u_j", j);
+            m_compute_bitonic_sort->Dispatch(hash_groups, 1, 1);
+            m_compute_bitonic_sort->Wait();
+        }
+    }
+
+    // Sub-stepping: slice the frame into 2 smaller, highly stable physics steps
     const int SUB_STEPS = 2;
     float sub_dt = dt / static_cast<float>(SUB_STEPS);
     
