@@ -109,5 +109,6 @@ add_custom_target(run
 # ---------------------------------------------------------
 enable_testing()
 add_executable(engine_tests tests/test_main.cpp)
-target_link_libraries(engine_tests PRIVATE engine_core GTest::gtest_main)
-add_test(NAME EngineTests COMMAND engine_tests)
+target_link_libraries(engine_tests PRIVATE engine_core GTest::gtest) 
+include(GoogleTest)
+gtest_discover_tests(engine_tests)

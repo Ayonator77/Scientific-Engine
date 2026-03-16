@@ -18,6 +18,8 @@ public:
                            float seaLevel = 0.05f, uint32_t seed = 0);
 
   void Draw() const;
+  const std::vector<glm::vec3>& GetVertices() const { return m_vertices; }
+  const std::vector<unsigned int>& GetIndices() const { return m_indices; }
 
 private:
   void GenerateBaseGeometry();
@@ -32,5 +34,5 @@ private:
   std::vector<glm::vec3> m_normals;
   std::vector<unsigned int> m_indices;
 
-  unsigned int m_VAO, m_VBO, m_EBO, m_normalVBO;
+  unsigned int m_VAO = 0, m_VBO = 0, m_EBO = 0, m_normalVBO = 0;
 };
