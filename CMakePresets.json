@@ -5,9 +5,9 @@
       "name": "msvc",
       "displayName": "VS 2026 + vcpkg (x64)",
       "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build/vs2026",
+      "binaryDir": "${sourceDir}/build/msvc",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "C:/Users/ayode/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
@@ -18,7 +18,7 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/ninja",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "C:/Users/ayode/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }

@@ -14,4 +14,4 @@ if not exist "build\vs2026" (
 
 :: If we reach here, the project is configured. Build and run it.
 echo --- Building and Executing Target ---
-cmake --build build\vs2026 --config Debug --target run
+cmake --build build\msvc --config Debug --target run

@@ -40,3 +40,8 @@ vcpkg-manifest-install.log
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Local configuration and debug artifacts
+imgui.ini
+gpu_vram*.txt
+*.log

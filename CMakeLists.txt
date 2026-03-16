@@ -20,7 +20,7 @@ include(FetchContent)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        docking
+    GIT_TAG        v1.90.4-docking
 )
 FetchContent_MakeAvailable(imgui)
 
@@ -76,30 +76,31 @@ target_link_libraries(engine_core PUBLIC
 # ---------------------------------------------------------
 # Main Executable
 # ---------------------------------------------------------
-add_executable(HydrostaticSim src/main.cpp)
-target_link_libraries(HydrostaticSim PRIVATE engine_core)
+add_executable(ScientificEngine src/main.cpp)
+target_link_libraries(ScientificEngine PRIVATE engine_core)
 
-set_target_properties(HydrostaticSim PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+set_target_properties(ScientificEngine PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
 # Copy runtime DLLs next to the exe (needed on Windows)
-add_custom_command(TARGET HydrostaticSim POST_BUILD
+add_custom_command(TARGET ScientificEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_RUNTIME_DLLS:HydrostaticSim>
-        $<TARGET_FILE_DIR:HydrostaticSim>
+        $<TARGET_RUNTIME_DLLS:ScientificEngine>
+        $<TARGET_FILE_DIR:ScientificEngine>
     COMMAND_EXPAND_LISTS
 )
 
-add_custom_command(TARGET HydrostaticSim POST_BUILD
+add_custom_command(TARGET ScientificEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
-        "$<TARGET_FILE_DIR:HydrostaticSim>/assets"
+        "$<TARGET_FILE_DIR:ScientificEngine>/assets"
 )
 
 # ---------------------------------------------------------
 # Custom Run Target
 # ---------------------------------------------------------
 add_custom_target(run
-    COMMAND $<TARGET_FILE:HydrostaticSim>
-    DEPENDS HydrostaticSim
+    COMMAND $<TARGET_FILE:ScientificEngine>
+    DEPENDS ScientificEngine
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
@@ -109,5 +110,4 @@ add_custom_target(run
 enable_testing()
 add_executable(engine_tests tests/test_main.cpp)
 target_link_libraries(engine_tests PRIVATE engine_core GTest::gtest_main)
-include(GoogleTest)
-gtest_discover_tests(engine_tests)
+add_test(NAME EngineTests COMMAND engine_tests)
