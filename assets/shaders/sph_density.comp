@@ -11,12 +11,27 @@ layout(std430, binding = 0) buffer ParticleBuffer{
     Particle particles[];
 };
 
+// --- SPATIAL HASHING BUFFERS ---
+layout(std430, binding = 1) readonly buffer SpatialIndices {
+    uvec2 indices[]; // x = hash, y = original index
+};
+
+layout(std430, binding = 2) readonly buffer SpatialOffsets {
+    uint offsets[]; // index = hash, value = start index in SpatialIndices
+};
+ 
 uniform int u_numParticles;
 uniform float u_smoothingRadius;
 uniform float u_targetDensity;
 uniform float u_pressureMultiplier;
+uniform int u_tableSize;
 
 const float PI = 3.14159265359;
+
+// Prime-number spatial hash function
+uint hash(ivec3 cell) {
+    return (uint(cell.x) * 73856093u ^ uint(cell.y) * 19349663u ^ uint(cell.z) * 83492791u) % uint(u_tableSize);
+}
 
 void main() {
     uint i = gl_GlobalInvocationID.x;
@@ -28,27 +43,50 @@ void main() {
     float h2 = h * h;
 
     float density = 0.0;
-
-    //Poly6 Kernal calculation
     float poly6_constant = 315.0 / (64.0 * PI * pow(h, 9.0));
 
-    //O(N^2) Brute force neighborhood search
-    for(int j =0; j< u_numParticles; j++){
-        vec3 diff = pos - particles[j].position.xyz;
-        float r2 = dot(diff, diff);
-        if (r2 < h2){
-            float val = h2 - r2;
-            density += mass * poly6_constant * val * val * val;
+    // Calculate grid cell coordinate
+    ivec3 cellCenter = ivec3(floor(pos / h));
+
+    // O(1) Spatial Hashing Neighborhood Search (3x3x3 Grid)
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            for (int z = -1; z <= 1; z++) {
+                
+                ivec3 neighborCell = cellCenter + ivec3(x, y, z);
+                uint neighborHash = hash(neighborCell);
+                uint startIndex = offsets[neighborHash];
+
+                // If the cell is empty, skip it immediately
+                if (startIndex == 0xFFFFFFFFu) continue;
+
+                // Iterate through the particles in this specific cell
+                for (uint j = startIndex; j < u_numParticles; j++) {
+                    // If the hash changes, we have left the cell's memory block!
+                    if (indices[j].x != neighborHash) break;
+
+                    uint neighborIndex = indices[j].y;
+                    vec3 diff = pos - particles[neighborIndex].position.xyz;
+                    float r2 = dot(diff, diff);
+
+                    if (r2 < h2) {
+                        float val = h2 - r2;
+                        density += mass * poly6_constant * val * val * val;
+                    }
+                }
+            }
         }
     }
 
-    //prevent density from hitting 0
+    // prevent density from hitting 0
     density = max(density, 0.0001);
 
-    //write back to SSB0
+    // write back to SSBO
     particles[i].position.w = density;
 
-    //calculate and write internal pressure (Equation of State)
+    // calculate and write internal pressure (Equation of State)
     float p = u_pressureMultiplier * (density - u_targetDensity);
+    
+    // Clamp negative pressure to prevent vacuum implosions
     particles[i].velocity.w = max(p, 0.0);
 }

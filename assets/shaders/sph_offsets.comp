@@ -1,0 +1,33 @@
+#version 460 core
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 1) readonly buffer SpatialIndices {
+    uvec2 indices[]; // x = hash, y = original index
+};
+
+layout(std430, binding = 2) writeonly buffer SpatialOffsets {
+    uint offsets[]; // index = hash, value = start index in SpatialIndices
+};
+
+uniform int u_numParticles;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= u_numParticles) return;
+
+    uint currentHash = indices[i].x;
+    
+    // Ignore the max uint values we used to push dead particles to the back of the bitonic sort
+    if (currentHash == 0xFFFFFFFFu) return;
+
+    // If we are the very first particle, or if our hash is different from the particle to our left...
+    // We are the "start" of a new cell!
+    if (i == 0) {
+        offsets[currentHash] = i;
+    } else {
+        uint prevHash = indices[i - 1].x;
+        if (currentHash != prevHash) {
+            offsets[currentHash] = i;
+        }
+    }
+}

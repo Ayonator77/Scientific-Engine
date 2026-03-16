@@ -11,14 +11,28 @@ layout(std430, binding = 0) buffer ParticleBuffer {
     Particle particles[];
 };
 
+// --- SPATIAL HASHING BUFFERS ---
+layout(std430, binding = 1) readonly buffer SpatialIndices {
+    uvec2 indices[]; // x = hash, y = original index
+};
+
+layout(std430, binding = 2) readonly buffer SpatialOffsets {
+    uint offsets[]; // index = hash, value = start index in SpatialIndices
+};
+ 
 uniform int u_numParticles;
 uniform float u_smoothingRadius;
 uniform float u_viscosity;
 uniform float u_gravity;
 uniform float u_collisionDamping;
 uniform float u_dt;
+uniform int u_tableSize;
 
 const float PI = 3.14159265359;
+
+uint hash(ivec3 cell) {
+    return (uint(cell.x) * 73856093u ^ uint(cell.y) * 19349663u ^ uint(cell.z) * 83492791u) % uint(u_tableSize);
+}
 
 void main() {
     uint i = gl_GlobalInvocationID.x;
@@ -37,25 +51,46 @@ void main() {
     float spiky_grad_constant = -45.0 / (PI * pow(h, 6.0));
     float visc_laplacian_constant = 45.0 / (PI * pow(h, 6.0));
 
-    for (int j = 0; j < u_numParticles; j++) {
-        if (i == j) continue;
-        
-        vec3 diff = pos - particles[j].position.xyz;
-        float r = max(length(diff), 0.0001); // Prevent division by zero
+    ivec3 cellCenter = ivec3(floor(pos / h));
 
-        if (r < h) {
-            float otherDensity = particles[j].position.w;
-            float otherPressure = particles[j].velocity.w;
-            vec3 otherVel = particles[j].velocity.xyz;
+    // O(1) Spatial Hashing Neighborhood Search (3x3x3 Grid)
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            for (int z = -1; z <= 1; z++) {
+                
+                ivec3 neighborCell = cellCenter + ivec3(x, y, z);
+                uint neighborHash = hash(neighborCell);
+                uint startIndex = offsets[neighborHash];
 
-            // Pressure Gradient Force
-            float pressureTerm = (pressure + otherPressure) / (2.0 * otherDensity);
-            vec3 gradW = spiky_grad_constant * pow(h - r, 2.0) * (diff / r);
-            pressureForce -= mass * pressureTerm * gradW;
+                if (startIndex == 0xFFFFFFFFu) continue;
 
-            // Viscosity Laplacian Force
-            float laplacianW = visc_laplacian_constant * (h - r);
-            viscosityForce += u_viscosity * mass * ((otherVel - vel) / otherDensity) * laplacianW;
+                for (uint j = startIndex; j < u_numParticles; j++) {
+                    if (indices[j].x != neighborHash) break;
+
+                    uint neighborIndex = indices[j].y;
+                    
+                    // Do not apply physical forces to yourself
+                    if (i == neighborIndex) continue;
+                    
+                    vec3 diff = pos - particles[neighborIndex].position.xyz;
+                    float r = max(length(diff), 0.0001); // Prevent division by zero
+
+                    if (r < h) {
+                        float otherDensity = particles[neighborIndex].position.w;
+                        float otherPressure = particles[neighborIndex].velocity.w;
+                        vec3 otherVel = particles[neighborIndex].velocity.xyz;
+
+                        // Pressure Gradient Force
+                        float pressureTerm = (pressure + otherPressure) / (2.0 * otherDensity);
+                        vec3 gradW = spiky_grad_constant * pow(h - r, 2.0) * (diff / r);
+                        pressureForce -= mass * pressureTerm * gradW;
+
+                        // Viscosity Laplacian Force
+                        float laplacianW = visc_laplacian_constant * (h - r);
+                        viscosityForce += u_viscosity * mass * ((otherVel - vel) / otherDensity) * laplacianW;
+                    }
+                }
+            }
         }
     }
 
@@ -67,14 +102,14 @@ void main() {
     // Semi-Implicit Euler Integration
     vel += acceleration * u_dt;
 
-    //SPH Stabilizer
+    // SPH Stabilizer (Global Drag)
     vel *= 0.995;
 
     pos += vel * u_dt;
 
     // --- INVISIBLE GLASS CONTAINER COLLISION ---
     float boxSize = 1.0;
-    float floorHeight = 1.3; // Hovering slightly above your planet
+    float floorHeight = 1.3; 
     float ceilingHeight = 6.0;
     float bounce = -u_collisionDamping;
 
