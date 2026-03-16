@@ -6,6 +6,11 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#include <psapi.h>
+#endif
 
 Editor::Editor(SDL_Window* window, SDL_GLContext gl_context){
     IMGUI_CHECKVERSION();
@@ -49,18 +54,21 @@ bool Editor::WantsCaptureMouse() const { return ImGui::GetIO().WantCaptureMouse;
 /**
  * Main Render entry point 
 */
-EditorOutput Editor::OnRender(PlanetParams& planetParams, SphParams& sphParams, std::vector<PointLight>& pointLights, float fps, int particle_count, float kinetic_energy){
+EditorOutput Editor::OnRender(PlanetParams& planetParams, SphSolver& solver, std::vector<PointLight>& pointLights, float fps, float kinetic_energy){
     EditorOutput output;
     SetupDockspace();
 
     RenderPlanetPanel(planetParams, output);
     RenderLightsPanel(pointLights);
-    RenderSimPanel(sphParams, output, kinetic_energy, particle_count);
-    RenderStatsBar(fps, particle_count);
+    
+    // Pass solver.GetParams() and solver.GetParticleCount() to the sim panel
+    RenderSimPanel(solver.GetParams(), output, kinetic_energy, solver.GetParticleCount());
+    RenderStatsBar(fps, solver.GetParticleCount());
 
-    if (m_showValidation) {
-        RenderValidationPanel();
-    }
+    if (m_showValidation) RenderValidationPanel();
+    
+    // --- ADD THE PROFILER HOOK ---
+    if (m_showMemoryProfiler) RenderMemoryProfiler(solver);
 
     return output;
 }
@@ -112,7 +120,8 @@ void Editor::SetupDefaultLayout(unsigned int dockspace_id) {
     ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace); 
     ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->WorkSize); 
 
-    ImGuiID left, right, center, bottom, right_bottom;
+    // Added left_bottom to the ID list
+    ImGuiID left, right, center, bottom, right_bottom, left_bottom;
 
     // Carve left sidebar (22% of total width)
     ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.22f, &left, &center);
@@ -123,15 +132,18 @@ void Editor::SetupDefaultLayout(unsigned int dockspace_id) {
     // Carve bottom stats bar (4% of remaining height)
     ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.04f, &bottom, &center);
 
-    // --- NEW: Split the right panel to dock the graph at the bottom ---
-    // Carve out the bottom 40% of the right panel
+    // Carve out the bottom 40% of the right panel for the CSV Graph
     ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.40f, &right_bottom, &right);
+
+    // --- NEW: Carve out the bottom 60% of the left panel for the Profiler ---
+    ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.60f, &left_bottom, &left);
 
     // Assign windows to regions
     ImGui::DockBuilderDockWindow("Planet Generation", left);
+    ImGui::DockBuilderDockWindow("Architecture & Memory Profiler", left_bottom); // <--- DOCKED HERE
     ImGui::DockBuilderDockWindow("Lights", right);
     ImGui::DockBuilderDockWindow("Simulation", right);
-    ImGui::DockBuilderDockWindow("Scientific Validation: Hydrostatic Equilibrium", right_bottom); // <--- DOCKED HERE
+    ImGui::DockBuilderDockWindow("Scientific Validation: Hydrostatic Equilibrium", right_bottom);
     ImGui::DockBuilderDockWindow("Stats", bottom);
     
     ImGui::DockBuilderFinish(dockspace_id);
@@ -153,6 +165,7 @@ void Editor::RenderMenuBar(){
     if(ImGui::BeginMenu("View")){ 
         if(ImGui::MenuItem("Reset Camera", "R")){/*TODO*/}
         if(ImGui::MenuItem("Toggle Wireframe", "F1")){/*TODO*/}
+        if(ImGui::MenuItem("Memory Profiler", nullptr, m_showMemoryProfiler)) { m_showMemoryProfiler = !m_showMemoryProfiler; }
         ImGui::EndMenu();
     }
 
@@ -161,6 +174,7 @@ void Editor::RenderMenuBar(){
         if(ImGui::MenuItem("Reset Simulation")){/*TODO*/}
         ImGui::EndMenu();
     }
+    
 
     ImGui::EndMenuBar();
 }
@@ -441,13 +455,112 @@ void Editor::RenderValidationPanel() {
     ImGui::End();
 }
 
+void Editor::RenderMemoryProfiler(SphSolver& solver) {
+    ImGui::SetNextWindowSize(ImVec2(650, 600), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Architecture & Memory Profiler", &m_showMemoryProfiler)) {
+        ImGui::End();
+        return;
+    }
+
+    // --- 1. OS PROCESS MEMORY ---
+    ImGui::SeparatorText("System RAM (CPU)");
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        if (ImGui::BeginTable("ram_table", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+            ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("Working Set (Current RAM)"); ImGui::TableNextColumn(); ImGui::Text("%zu MB", pmc.WorkingSetSize / (1024 * 1024));
+            ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("Peak Working Set"); ImGui::TableNextColumn(); ImGui::Text("%zu MB", pmc.PeakWorkingSetSize / (1024 * 1024));
+            ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("Pagefile Usage (Committed)"); ImGui::TableNextColumn(); ImGui::Text("%zu MB", pmc.PagefileUsage / (1024 * 1024));
+            ImGui::EndTable();
+        }
+    }
+#endif
+
+    ImGui::Spacing();
+
+    // --- 2. STRUCT ALIGNMENT (DATA-ORIENTED DESIGN) ---
+    ImGui::SeparatorText("Data-Oriented Alignment (std430)");
+    ImGui::TextWrapped("Note: Structs must align to 16-byte boundaries to prevent GPU cache misses.");
+    if (ImGui::BeginTable("struct_table", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+        ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("sizeof(Particle)"); ImGui::TableNextColumn(); 
+        ImGui::Text("%zu bytes %s", sizeof(Particle), (sizeof(Particle) % 16 == 0) ? "(Perfect)" : "(Misaligned!)");
+        
+        ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("sizeof(PointLight)"); ImGui::TableNextColumn(); 
+        ImGui::Text("%zu bytes", sizeof(PointLight));
+        
+        ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("sizeof(SphSolver)"); ImGui::TableNextColumn(); 
+        ImGui::Text("%zu bytes (Class Instance)", sizeof(SphSolver));
+        ImGui::EndTable();
+    }
+
+    ImGui::Spacing();
+
+    // --- 3. VRAM ALLOCATIONS ---
+    ImGui::SeparatorText("GPU VRAM Allocations");
+    if (ImGui::BeginTable("vram_table", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("Buffer Target"); ImGui::TableSetupColumn("ID"); ImGui::TableSetupColumn("Footprint"); ImGui::TableHeadersRow();
+        
+        int pCount = solver.GetParams().active_particle_count;
+        size_t pBytes = pCount * sizeof(Particle);
+        size_t hashBytes = 65536 * sizeof(unsigned int) * 2;
+        size_t offsetBytes = solver.GetParams().spatial_grid_size * sizeof(unsigned int);
+        
+        ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("Particle Data (SSBO 0)"); ImGui::TableNextColumn(); ImGui::Text("%u", solver.GetParticleSSBO()); ImGui::TableNextColumn(); ImGui::Text("%.2f MB", (float)pBytes / 1048576.0f);
+        ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("Spatial Indices (SSBO 1)"); ImGui::TableNextColumn(); ImGui::Text("%u", solver.GetHashSSBO()); ImGui::TableNextColumn(); ImGui::Text("%.2f MB", (float)hashBytes / 1048576.0f);
+        ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("Spatial Offsets (SSBO 2)"); ImGui::TableNextColumn(); ImGui::Text("%u", solver.GetOffsetSSBO()); ImGui::TableNextColumn(); ImGui::Text("%.2f MB", (float)offsetBytes / 1048576.0f);
+        
+        ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::Text("TOTAL SSBO FOOTPRINT"); ImGui::TableNextColumn(); ImGui::Text("-"); ImGui::TableNextColumn(); ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%.2f MB", (float)(pBytes + hashBytes + offsetBytes) / 1048576.0f);
+        ImGui::EndTable();
+    }
+
+    ImGui::Spacing();
+
+    // --- 4. CONTIGUOUS HEAP ADDRESSES ---
+    ImGui::SeparatorText("CPU Staging Heap Addresses");
+    ImGui::TextWrapped("Warning: These are the CPU-side staging addresses. Mapping live VRAM addresses every frame would force a GPU stall and destroy performance.");
+    
+    const auto& particles = solver.GetParticlesRaw();
+    if (!particles.empty()) {
+        if (ImGui::BeginTable("addr_table", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Index"); ImGui::TableSetupColumn("Hex Address"); ImGui::TableHeadersRow();
+            
+            // Show top 10 particles
+            int limit = std::min(10, (int)particles.size());
+            for (int i = 0; i < limit; i++) {
+                ImGui::TableNextRow(); 
+                ImGui::TableNextColumn(); ImGui::Text("Particle[%d]", i); 
+                ImGui::TableNextColumn(); 
+                // Using %p to print the raw memory pointer
+                ImGui::Text("%p", (void*)&particles[i]); 
+            }
+            ImGui::EndTable();
+        }
+    } else {
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Particles not spawned yet. Awaiting heap allocation.");
+    }
+
+    ImGui::End();
+}
 
 // Stats bar — thin bottom panel, no title bar, just live numbers
 
 
 void Editor::RenderStatsBar(float fps, int particleCount) {
     ImGui::Begin("Stats");
-    ImGui::Text("FPS: %.1f   |   Particles: %d   |   OpenGL 4.6", fps, particleCount);
+    
+    // --- MEMORY PROFILER ---
+    size_t ramUsageMB = 0;
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS pmc;
+    // Ask the Windows Kernel for the physical RAM this process is holding
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        ramUsageMB = pmc.WorkingSetSize / (1024 * 1024); // Convert Bytes to MB
+    }
+#endif
+
+    ImGui::Text("FPS: %.1f   |   Particles: %d   |   RAM: %zu MB   |   OpenGL 4.6", 
+                fps, particleCount, ramUsageMB);
+                
     ImGui::End();
 }
 

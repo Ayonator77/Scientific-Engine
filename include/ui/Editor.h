@@ -4,6 +4,7 @@
 #include <SDL2/SDL.h>
 #include <vector>
 #include "physics/SphParams.h"
+#include "physics/SphSolver.h"
 /*
 Struct to hold the parsed csv rows
 */
@@ -43,7 +44,7 @@ public:
    void EndFrame();
 
    //Build all panels. return flags for the application to act on
-   EditorOutput OnRender(PlanetParams& planetParams, SphParams& sphParams, std::vector<PointLight>& pointLights, float fps, int particle_count, float kinetic_energy);
+   EditorOutput OnRender(PlanetParams& planetParams, SphSolver& solver, std::vector<PointLight>& pointLights, float fps, float kinetic_energy);
    void RenderSimPanel(SphParams& params, EditorOutput& output, float kinetic_energy, int particle_count);
 
    //Query ImGui's capture state - suppress camera/game input when true
@@ -61,9 +62,10 @@ private:
    void RenderStatsBar(float fps, int particle_count);
    void LoadCSV(const std::string& filepath);
    void RenderValidationPanel();
+   void RenderMemoryProfiler(SphSolver& solver);
 
    bool m_first_frame = true;
    std::vector<CsvDataPoint> m_validationData;
    bool m_showValidation = false;
-
+   bool m_showMemoryProfiler = false;
 };

@@ -21,6 +21,10 @@ public:
     unsigned int GetVAO() const { return m_VAO; }
     int GetParticleCount() const { return m_isSpawned ? m_params.active_particle_count : 0; }
     SphParams& GetParams() { return m_params; }
+    const std::vector<Particle>& GetParticlesRaw() const { return m_particles; }
+    unsigned int GetParticleSSBO() const { return m_SSBO; }
+    unsigned int GetHashSSBO() const { return m_spatial_indicesSSBO; }
+    unsigned int GetOffsetSSBO() const { return m_spatial_offsetSSBO; }
 
 private:
     void InitializeParticles();

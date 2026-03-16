@@ -86,7 +86,7 @@ void Application::run() {
 
         // UI Phase
         m_editor->BeginFrame();
-        EditorOutput out = m_editor->OnRender(m_scene->GetPlanetParams(), m_scene->GetSphSolver().GetParams(), m_scene->GetLights(), fps, m_scene->GetSphSolver().GetParticleCount(), 0.0f);
+        EditorOutput out = m_editor->OnRender(m_scene->GetPlanetParams(), m_scene->GetSphSolver(), m_scene->GetLights(), fps, 0.0f);
         m_editor->EndFrame();
  
         if (out.planet_regen_requested) {
