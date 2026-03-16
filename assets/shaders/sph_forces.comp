@@ -148,7 +148,7 @@ void main() {
     float pressure = particles[i].velocity.w;
     float mass = particles[i].force.w;
     float h = u_smoothingRadius;
-
+    float h2 = h * h;
     vec3 pressureForce = vec3(0.0);
     vec3 viscosityForce = vec3(0.0);
 
@@ -172,22 +172,30 @@ void main() {
                     if (indices[j].x != neighborHash) break;
 
                     uint neighborIndex = indices[j].y;
-                    
-                    // Do not apply physical forces to yourself
-                    if (i == neighborIndex) continue;
-                    
-                    vec3 diff = pos - particles[neighborIndex].position.xyz;
-                    float r = max(length(diff), 0.0001); // Prevent division by zero
+                    if (neighborIndex == i) continue;
 
-                    if (r < h) {
+                    vec3 neighborPos = particles[neighborIndex].position.xyz;
+
+                    // --- V&V SPATIAL CORRECTNESS CHECK ---
+                    ivec3 actualCell = ivec3(floor(neighborPos / u_smoothingRadius));
+                    if (actualCell != neighborCell) continue;
+                    // -------------------------------------
+
+                    vec3 diff = pos - neighborPos;
+                    float r2 = dot(diff, diff);
+
+                    if (r2 < h2 && r2 > 1e-5) {
+                        float r = sqrt(r2);
+                        vec3 dir = diff / r;
+                        
                         float otherDensity = particles[neighborIndex].position.w;
                         float otherPressure = particles[neighborIndex].velocity.w;
                         vec3 otherVel = particles[neighborIndex].velocity.xyz;
 
                         // Pressure Gradient Force
                         float pressureTerm = (pressure + otherPressure) / (2.0 * otherDensity);
-                        vec3 gradW = spiky_grad_constant * pow(h - r, 2.0) * (diff / r);
-                        pressureForce -= mass * pressureTerm * gradW;
+                        float spikyGrad = spiky_grad_constant * (h - r) * (h - r);
+                        pressureForce -= mass * pressureTerm * spikyGrad * dir;
 
                         // Viscosity Laplacian Force
                         float laplacianW = visc_laplacian_constant * (h - r);

@@ -62,11 +62,20 @@ void main() {
 
                 // Iterate through the particles in this specific cell
                 for (uint j = startIndex; j < u_numParticles; j++) {
-                    // If the hash changes, we have left the cell's memory block!
+                    // If the hash changes, we have left the memory block
                     if (indices[j].x != neighborHash) break;
 
                     uint neighborIndex = indices[j].y;
-                    vec3 diff = pos - particles[neighborIndex].position.xyz;
+                    vec3 neighborPos = particles[neighborIndex].position.xyz;
+
+                    // --- V&V SPATIAL CORRECTNESS CHECK ---
+                    // Hash collisions exist. We MUST verify this particle is physically 
+                    // inside the target cell before executing expensive floating-point math.
+                    ivec3 actualCell = ivec3(floor(neighborPos / u_smoothingRadius));
+                    if (actualCell != neighborCell) continue;
+                    // -------------------------------------
+
+                    vec3 diff = pos - neighborPos;
                     float r2 = dot(diff, diff);
 
                     if (r2 < h2) {
