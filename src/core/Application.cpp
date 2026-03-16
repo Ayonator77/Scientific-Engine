@@ -101,6 +101,10 @@ void Application::run() {
             m_scene->GetSphSolver().TriggerLogging();
         }
 
+        if (out.export_csv_requested) {
+            m_scene->GetSphSolver().ExportHydrostaticCSV();
+        }
+
         m_context->SwapBuffers();
     }
 }

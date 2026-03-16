@@ -4,6 +4,12 @@
 #include <SDL2/SDL.h>
 #include <vector>
 #include "physics/SphParams.h"
+/*
+Struct to hold the parsed csv rows
+*/
+struct CsvDataPoint{
+   float radius, density, pressure, velocity;
+};
 
 /**
  * Output flags that the applicaiton reads each frame to act on UI events
@@ -14,6 +20,7 @@ struct EditorOutput
     bool planet_regen_requested = false;
     bool sim_reset_requested = false;
     bool debug_log_requested = false;
+    bool export_csv_requested = false;
  };
  
 
@@ -52,7 +59,11 @@ private:
    void RenderPlanetPanel(PlanetParams& planetParams, EditorOutput& output);
    void RenderLightsPanel(std::vector<PointLight>& pointLights);
    void RenderStatsBar(float fps, int particle_count);
+   void LoadCSV(const std::string& filepath);
+   void RenderValidationPanel();
 
    bool m_first_frame = true;
+   std::vector<CsvDataPoint> m_validationData;
+   bool m_showValidation = false;
 
 };

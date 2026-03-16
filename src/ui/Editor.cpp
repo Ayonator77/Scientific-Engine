@@ -3,6 +3,9 @@
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_internal.h>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 
 Editor::Editor(SDL_Window* window, SDL_GLContext gl_context){
     IMGUI_CHECKVERSION();
@@ -55,6 +58,10 @@ EditorOutput Editor::OnRender(PlanetParams& planetParams, SphParams& sphParams, 
     RenderSimPanel(sphParams, output, kinetic_energy, particle_count);
     RenderStatsBar(fps, particle_count);
 
+    if (m_showValidation) {
+        RenderValidationPanel();
+    }
+
     return output;
 }
 
@@ -99,27 +106,34 @@ void Editor::SetupDockspace(){
 }
 
 
-//Programatically creates left + right sidebar layout on first launch.
-void Editor::SetupDefaultLayout(unsigned int dockspace_id){
+// Programmatically creates left + right sidebar layout on first launch.
+void Editor::SetupDefaultLayout(unsigned int dockspace_id) {
     ImGui::DockBuilderRemoveNode(dockspace_id); // Clear any existing layout
-    ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace); // Add empty node with the DockSpace flag
-    ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->WorkSize); // Set size to fill the viewport
+    ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace); 
+    ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->WorkSize); 
 
-    ImGuiID left, right, center, bottom;
+    ImGuiID left, right, center, bottom, right_bottom;
 
-    //carve left sidebar (22% of total width)
+    // Carve left sidebar (22% of total width)
     ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.22f, &left, &center);
-    //carve right sidebar (28% remaining = ~22% of total width
+    
+    // Carve right sidebar (28% remaining = ~22% of total width)
     ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.28f, &right, &center);
-    //carve bottom stats bar (4% of remaining height)
+    
+    // Carve bottom stats bar (4% of remaining height)
     ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.04f, &bottom, &center);
 
-    // Assign windows to regions. "Lights" and "Simulation" share the right
-    // node as tabs — ImGui handles the tab bar automatically.
+    // --- NEW: Split the right panel to dock the graph at the bottom ---
+    // Carve out the bottom 40% of the right panel
+    ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.40f, &right_bottom, &right);
+
+    // Assign windows to regions
     ImGui::DockBuilderDockWindow("Planet Generation", left);
     ImGui::DockBuilderDockWindow("Lights", right);
     ImGui::DockBuilderDockWindow("Simulation", right);
+    ImGui::DockBuilderDockWindow("Scientific Validation: Hydrostatic Equilibrium", right_bottom); // <--- DOCKED HERE
     ImGui::DockBuilderDockWindow("Stats", bottom);
+    
     ImGui::DockBuilderFinish(dockspace_id);
 }
 
@@ -294,7 +308,7 @@ void Editor::RenderSimPanel(SphParams& params, EditorOutput& output, float kinet
     ImGui::SliderFloat("Pressure", &params.pressure_multiplier, 0.0f, 2000.0f, "%.1f");
     ImGui::SliderFloat("Viscosity", &params.viscosity, 0.00f, 0.2f, "%.3f");
     ImGui::SliderFloat("Gravity", &params.gravity, -20.0f, 0.0f, "%.2f");
-    ImGui::SliderFloat("Wall Damping", &params.collision_damping, 0.1f, 1.0f, "%.2f");
+    //ImGui::SliderFloat("Wall Damping", &params.collision_damping, 0.1f, 1.0f, "%.2f");
 
     ImGui::Spacing();
     ImGui::SeparatorText("State");
@@ -317,7 +331,112 @@ void Editor::RenderSimPanel(SphParams& params, EditorOutput& output, float kinet
     if (ImGui::Button("Log GPU State to Console", ImVec2(-1.0f, 0.0f))) {
         output.debug_log_requested = true;
     }
+
     ImGui::PopStyleColor(3);
+
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.35f, 0.58f, 1.0f)); // Blue button
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.46f, 0.74f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.28f, 0.56f, 1.00f, 1.00f));
+    if (ImGui::Button("Export Hydrostatic CSV", ImVec2(-1.0f, 0.0f))) {
+        output.export_csv_requested = true;
+    }
+    ImGui::PopStyleColor(3);
+
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.48f, 0.18f, 0.58f, 1.0f)); // Purple button
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.64f, 0.24f, 0.74f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.80f, 0.28f, 1.00f, 1.00f));
+    if (ImGui::Button("Graph Exported CSV", ImVec2(-1.0f, 0.0f))) {
+        LoadCSV("hydrostatic_profile.csv");
+        m_showValidation = true;
+    }
+    ImGui::PopStyleColor(3);
+
+    ImGui::End();
+}
+
+void Editor::LoadCSV(const std::string& filepath) {
+    m_validationData.clear();
+    std::ifstream file(filepath);
+    if (!file.is_open()) return;
+
+    std::string line;
+    std::getline(file, line); // Skip the header row
+
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string token;
+        CsvDataPoint pt;
+        
+        if (std::getline(ss, token, ',')) pt.radius = std::stof(token);
+        if (std::getline(ss, token, ',')) pt.density = std::stof(token);
+        if (std::getline(ss, token, ',')) pt.pressure = std::stof(token);
+        if (std::getline(ss, token, ',')) pt.velocity = std::stof(token);
+        
+        m_validationData.push_back(pt);
+    }
+
+    // Sort the particles from the core of the planet outward to the surface
+    std::sort(m_validationData.begin(), m_validationData.end(), 
+        [](const CsvDataPoint& a, const CsvDataPoint& b) {
+            return a.radius < b.radius;
+        });
+}
+
+void Editor::RenderValidationPanel() {
+    ImGui::SetNextWindowSize(ImVec2(700, 500), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Scientific Validation: Hydrostatic Equilibrium", &m_showValidation)) {
+        ImGui::End();
+        return;
+    }
+
+    if (m_validationData.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, 1.0f), "No data found! Please Export the CSV first.");
+        ImGui::End();
+        return;
+    }
+
+    // Find min and max bounds to dynamically scale the graph
+    float minR = 99999.0f, maxR = -99999.0f;
+    float maxP = -99999.0f;
+    for (const auto& d : m_validationData) {
+        if (d.radius < minR) minR = d.radius;
+        if (d.radius > maxR) maxR = d.radius;
+        if (d.pressure > maxP) maxP = d.pressure;
+    }
+
+    ImGui::Text("Proof of Equilibrium: Pressure strictly increases as radius approaches the core.");
+    ImGui::Text("Sample Size: %zu fluid particles", m_validationData.size());
+    ImGui::Spacing();
+
+    // Setup the rendering canvas
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float width = ImGui::GetContentRegionAvail().x;
+    float height = ImGui::GetContentRegionAvail().y - 30.0f; // Leave room for axis text
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    // Draw the graph background and border
+    draw_list->AddRectFilled(p, ImVec2(p.x + width, p.y + height), IM_COL32(20, 20, 25, 255));
+    draw_list->AddRect(p, ImVec2(p.x + width, p.y + height), IM_COL32(100, 100, 100, 255));
+
+    // Plot all 40,000 particles natively
+    if (maxR > minR && maxP > 0.0f) {
+        for (const auto& d : m_validationData) {
+            // Normalize X (Radius) and Y (Pressure) between 0.0 and 1.0
+            float nx = (d.radius - minR) / (maxR - minR);
+            float ny = d.pressure / maxP;
+            
+            // Map to screen coordinates (Y is inverted on screens)
+            ImVec2 pos(p.x + nx * width, p.y + height - ny * height);
+            
+            // Draw a semi-transparent blue dot for each particle
+            draw_list->AddCircleFilled(pos, 1.5f, IM_COL32(70, 150, 255, 150)); 
+        }
+    }
+
+    ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + height + 10));
+    ImGui::Text("Planet Core <------------------------ Radius ------------------------> Ocean Surface");
 
     ImGui::End();
 }

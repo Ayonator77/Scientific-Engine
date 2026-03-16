@@ -15,6 +15,7 @@ public:
     void Update(float dt, const PlanetParams& planetParams);
     void Reset();
     void TriggerLogging() { if (m_logFramesRemaining <= 0) m_logFramesRemaining = 5; }
+    void ExportHydrostaticCSV();
 
     //Getters for the Renderer
     unsigned int GetVAO() const { return m_VAO; }

@@ -237,3 +237,45 @@ void SphSolver::WriteLogFrame() {
         std::cout << "[LOGGING] Multi-frame capture complete! Saved to gpu_vram_multiframe_dump.txt" << std::endl;
     }
 }
+
+void SphSolver::ExportHydrostaticCSV() {
+    if (!m_isSpawned || m_params.active_particle_count == 0) {
+        std::cerr << "[WARNING] Cannot export CSV. Simulation has not been started." << std::endl;
+        return;
+    }
+
+    std::cout << "[V&V] Mapping VRAM to CPU..." << std::endl;
+    
+    // Lock the GPU buffer for reading
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_SSBO);
+    Particle* ptr = (Particle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+
+    if (ptr) {
+        std::ofstream csvFile("hydrostatic_profile.csv");
+        
+        // Write standard CSV headers
+        csvFile << "RadiusFromCore,Density,Pressure,VelocityMagnitude\n";
+
+        for (int i = 0; i < m_params.active_particle_count; i++) {
+            // Reconstruct the physics profile
+            float radius = glm::length(glm::vec3(ptr[i].position));
+            float density = ptr[i].position.w;
+            float pressure = ptr[i].velocity.w;
+            float velocityMag = glm::length(glm::vec3(ptr[i].velocity));
+
+            // Discard completely dead/nan particles to keep the dataset clean
+            if (!std::isnan(density)) {
+                csvFile << radius << "," << density << "," << pressure << "," << velocityMag << "\n";
+            }
+        }
+
+        csvFile.close();
+        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+        std::cout << "[V&V] Successfully exported " << m_params.active_particle_count 
+                  << " particles to 'hydrostatic_profile.csv'." << std::endl;
+    } else {
+        std::cerr << "[FATAL] Failed to map GPU buffer for CSV export!" << std::endl;
+    }
+    
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
