@@ -5,19 +5,20 @@
 #include <vector>
 #include <memory>
 #include <fstream>
+#include "core/PlanetParams.h"
 
 class SphSolver{
 public:
     SphSolver(const SphParams& params);
     ~SphSolver();
 
-    void Update(float dt);
+    void Update(float dt, const PlanetParams& planetParams);
     void Reset();
-    void TriggerLogging() { m_logFramesRemaining = 5; }
+    void TriggerLogging() { if (m_logFramesRemaining <= 0) m_logFramesRemaining = 5; }
 
     //Getters for the Renderer
     unsigned int GetVAO() const { return m_VAO; }
-    int GetParticleCount() const { return m_params.active_particle_count; }
+    int GetParticleCount() const { return m_isSpawned ? m_params.active_particle_count : 0; }
     SphParams& GetParams() { return m_params; }
 
 private:
@@ -29,6 +30,7 @@ private:
     std::vector<Particle> m_particles;
     int m_logFramesRemaining = 0;
     std::ofstream m_logFile;
+    bool m_isSpawned = false;
 
     unsigned int m_VAO = 0;
     unsigned int m_SSBO = 0;

@@ -6,9 +6,9 @@ struct SphParams {
 
     //total numvber of spatial grid cells, 2^18 (must be a power of 2 for bitonic sort to work)
     int spatial_grid_size = 262144;
-    float smoothing_radius = 0.2f;
+    float smoothing_radius = 0.04f;
     float target_density = 2000.0f; // water is roughly 1000 kg/m^3
-    float pressure_multiplier = 800.0f;
+    float pressure_multiplier = 0.1f;
     float viscosity = 0.05f;
     float gravity = -9.81f;
     float collision_damping = 0.6f;

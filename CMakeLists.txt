@@ -53,6 +53,7 @@ add_library(engine_core
     src/core/Input.cpp
     src/core/GraphicsContext.cpp
     src/core/Scene.cpp
+    src/core/Framebuffer.cpp
     src/core/Renderer.cpp
     src/geometry/Icosahedron.cpp
     src/ui/Editor.cpp
