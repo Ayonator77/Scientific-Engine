@@ -11,7 +11,7 @@ SphSolver::SphSolver(const SphParams& params) : m_params(params) {
     m_compute_spatial_offsets = std::make_unique<ComputeShader>("assets/shaders/sph_offsets.comp");
     m_compute_density_pressure = std::make_unique<ComputeShader>("assets/shaders/sph_density.comp");
     m_compute_forces = std::make_unique<ComputeShader>("assets/shaders/sph_forces.comp");
-    Reset();
+    // Reset();
 }
 
 SphSolver::~SphSolver() {
@@ -22,6 +22,7 @@ SphSolver::~SphSolver() {
 }
 
 void SphSolver::Reset() {
+    m_isSpawned = true;
     InitializeParticles();
     SetupBuffers();
 }
@@ -45,6 +46,7 @@ void SphSolver::InitializeParticles() {
                     (z * spacing) - offset,
                     0.0f // w component holds density
                 );
+                //p.force.w = 0.05f;
                 m_particles.push_back(p);
             }
         }
@@ -89,7 +91,9 @@ void SphSolver::SetupBuffers() {
 
 }
 
-void SphSolver::Update(float dt) {
+void SphSolver::Update(float dt, const PlanetParams& planetParams) {
+    if (!m_isSpawned) return;
+
     if (dt > 0.016f) dt = 0.016f; 
 
     // PASS 0 - SPATIAL HASHING & SORTING 
@@ -158,6 +162,13 @@ void SphSolver::Update(float dt) {
         m_compute_forces->SetFloat("u_gravity", m_params.gravity);
         m_compute_forces->SetFloat("u_collisionDamping", m_params.collision_damping);
         m_compute_forces->SetFloat("u_dt", sub_dt); // Pass the micro-dt!
+
+        // ---- PASS 3: Planet Parameters ----
+        m_compute_forces->SetFloat("u_planetAmplitude", planetParams.amplitude);
+        m_compute_forces->SetFloat("u_planetFrequency", planetParams.frequency);
+        m_compute_forces->SetInt("u_planetOctaves", planetParams.octaves);
+        m_compute_forces->SetFloat("u_planetSeaLevel", planetParams.sea_level);
+        m_compute_forces->SetInt("u_planetSeed", planetParams.seed);
 
         m_compute_forces->Dispatch(num_groups, 1, 1);
         m_compute_forces->Wait();

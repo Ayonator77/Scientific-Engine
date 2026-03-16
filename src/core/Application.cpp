@@ -4,7 +4,7 @@ Application::Application(const std::string& title, int width, int height)
     : m_isRunning(false), m_width(width), m_height(height) 
 {
     m_context = std::make_unique<GraphicsContext>(title, width, height);
-    m_renderer = std::make_unique<Renderer>();
+    m_renderer = std::make_unique<Renderer>(width, height);
     m_editor = std::make_unique<Editor>(m_context->GetWindow(), m_context->GetGLContext());
     m_scene = std::make_unique<Scene>(width, height);
     m_isRunning = true;
@@ -68,7 +68,7 @@ void Application::run() {
         ProcessInput();
 
         // Physics Phase
-        m_scene->GetSphSolver().Update(dt);
+        m_scene->GetSphSolver().Update(dt, m_scene->GetPlanetParams());;
 
         // Render Phase
         m_renderer->Clear();
@@ -76,7 +76,12 @@ void Application::run() {
             m_renderer->DrawPlanet(*m_scene->GetPlanet(), m_scene->GetCamera(), m_scene->GetLights());
         }
 
-        m_renderer->DrawParticle(m_scene->GetSphSolver().GetVAO(), m_scene->GetSphSolver().GetParticleCount(), m_scene->GetCamera());
+        m_renderer->DrawParticle(
+            m_scene->GetSphSolver().GetVAO(), 
+            m_scene->GetSphSolver().GetParticleCount(), 
+            m_scene->GetCamera(),
+            m_scene->GetSphSolver().GetParams().smoothing_radius 
+        );
         m_renderer->DrawLightBillboard(m_scene->GetCamera(), m_scene->GetLights());
 
         // UI Phase
