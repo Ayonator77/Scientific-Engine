@@ -1,7 +1,7 @@
 #pragma once
 
 struct SphParams {
-    int spawn_count = 8000;
+    int spawn_count = 27000;
     int active_particle_count = 0;
 
     //total numvber of spatial grid cells, 2^18 (must be a power of 2 for bitonic sort to work)

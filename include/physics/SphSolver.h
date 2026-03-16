@@ -4,6 +4,7 @@
 #include "core/ComputeShader.h"
 #include <vector>
 #include <memory>
+#include <fstream>
 
 class SphSolver{
 public:
@@ -12,7 +13,7 @@ public:
 
     void Update(float dt);
     void Reset();
-    void LogGPUState();
+    void TriggerLogging() { m_logFramesRemaining = 5; }
 
     //Getters for the Renderer
     unsigned int GetVAO() const { return m_VAO; }
@@ -22,9 +23,12 @@ public:
 private:
     void InitializeParticles();
     void SetupBuffers();
+    void WriteLogFrame();
 
     SphParams m_params;
     std::vector<Particle> m_particles;
+    int m_logFramesRemaining = 0;
+    std::ofstream m_logFile;
 
     unsigned int m_VAO = 0;
     unsigned int m_SSBO = 0;

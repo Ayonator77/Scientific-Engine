@@ -93,7 +93,7 @@ void Application::run() {
         }
 
         if(out.debug_log_requested){
-            m_scene->GetSphSolver().LogGPUState();
+            m_scene->GetSphSolver().TriggerLogging();
         }
 
         m_context->SwapBuffers();

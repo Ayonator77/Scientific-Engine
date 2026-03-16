@@ -110,7 +110,7 @@ void SphSolver::Update(float dt) {
     
     // The recursive CPU dispatch loop required to execute a Bitonic Sort on the GPU
     for (unsigned int k = 2; k <= sort_capacity; k <<= 1) {
-        for (unsigned int j = k >> 1; j > 0; j <<= 1) {
+        for (unsigned int j = k >> 1; j > 0; j >>= 1) {
             m_compute_bitonic_sort->SetInt("u_k", k);
             m_compute_bitonic_sort->SetInt("u_j", j);
             m_compute_bitonic_sort->Dispatch(hash_groups, 1, 1);
@@ -162,27 +162,35 @@ void SphSolver::Update(float dt) {
         m_compute_forces->Dispatch(num_groups, 1, 1);
         m_compute_forces->Wait();
     }
+
+    if (m_logFramesRemaining > 0) {
+        WriteLogFrame();
+    }
 }
 
-void SphSolver::LogGPUState() {
-    // 1. Tell OpenGL we want to read the SSBO
+void SphSolver::WriteLogFrame() {
+    // If this is the first frame of the capture, open the file and write the parameters
+    if (m_logFramesRemaining == 5) {
+        m_logFile.open("gpu_vram_multiframe_dump.txt");
+        m_logFile << "=== SPH MULTI-FRAME DIAGNOSTIC ===\n";
+        m_logFile << "Active Particles:    " << m_params.active_particle_count << "\n";
+        m_logFile << "Smoothing Radius:    " << m_params.smoothing_radius << " (Sphere of Influence)\n";
+        m_logFile << "Target Density:      " << m_params.target_density << "\n";
+        m_logFile << "Pressure Multiplier: " << m_params.pressure_multiplier << "\n";
+        m_logFile << "==================================\n\n";
+        std::cout << "[LOGGING] Starting 5-frame capture..." << std::endl;
+    }
+
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_SSBO);
-    
-    // 2. Lock the GPU memory and get a CPU pointer
     Particle* ptr = (Particle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
     
     if (ptr) {
         float maxVel = 0.0f;
         float minDensity = 999999.0f;
         float maxDensity = -999999.0f;
-        double totalKineticEnergy = 0.0;
-        int nanCount = 0;
-
-        // 3. Scan the macro state
+        
         for (int i = 0; i < m_params.active_particle_count; i++) {
             float v = glm::length(glm::vec3(ptr[i].velocity));
-            if (std::isnan(v)) nanCount++;
-            
             maxVel = std::max(maxVel, v);
             
             float d = ptr[i].position.w;
@@ -190,44 +198,31 @@ void SphSolver::LogGPUState() {
                 minDensity = std::min(minDensity, d);
                 maxDensity = std::max(maxDensity, d);
             }
-            
-            totalKineticEnergy += 0.5 * ptr[i].force.w * (v * v);
         }
 
-        // 4. Open a text file to dump the VRAM
-        std::ofstream file("gpu_vram_dump.txt");
-        if (file.is_open()) {
-            file << "=== SPH GPU MEMORY DIAGNOSTIC ===\n";
-            file << "Total Particles: " << m_params.active_particle_count << "\n";
-            file << "NaN (Corrupted) Particles: " << nanCount << "\n";
-            file << "Max Velocity: " << maxVel << " m/s\n";
-            file << "Density Range: [" << minDensity << ", " << maxDensity << "]\n";
-            file << "System Kinetic Energy: " << totalKineticEnergy << " J\n";
-            file << "=================================\n\n";
-            
-            file << "--- INDIVIDUAL PARTICLE DATA ---\n";
-            file << "Format: [Index] Pos(x,y,z) | Vel(x,y,z) | Density | Pressure\n";
-            
-            // Dump every single particle to the file
-            for (int i = 0; i < m_params.active_particle_count; i++) {
-                file << "[" << i << "] "
-                     << "P(" << ptr[i].position.x << ", " << ptr[i].position.y << ", " << ptr[i].position.z << ") | "
-                     << "V(" << ptr[i].velocity.x << ", " << ptr[i].velocity.y << ", " << ptr[i].velocity.z << ") | "
-                     << "D:" << ptr[i].position.w << " | "
-                     << "Pr:" << ptr[i].velocity.w << "\n";
-            }
-            
-            file.close();
-            std::cout << "[SUCCESS] VRAM successfully dumped to gpu_vram_dump.txt" << std::endl;
-        } else {
-            std::cout << "[ERROR] Could not open file for writing." << std::endl;
+        m_logFile << "--- FRAME " << (6 - m_logFramesRemaining) << " ---\n";
+        m_logFile << "Max Velocity: " << maxVel << " m/s\n";
+        m_logFile << "Density Range: [" << minDensity << ", " << maxDensity << "]\n";
+        
+        // Dump a sample set of particles to track their specific movement across frames
+        for (int i = 0; i < 15; i++) {
+            m_logFile << "[" << i << "] "
+                      << "P(" << ptr[i].position.x << ", " << ptr[i].position.y << ", " << ptr[i].position.z << ") | "
+                      << "D:" << ptr[i].position.w << " | "
+                      << "Pr:" << ptr[i].velocity.w << "\n";
         }
-
-        // 5. CRITICAL: Unlock the memory
+        m_logFile << "\n";
+        
         glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-    } else {
-        std::cout << "[ERROR] Failed to map GPU memory.\n";
     }
-    
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    // Decrement the counter
+    m_logFramesRemaining--;
+    
+    // Close the file if the capture is complete
+    if (m_logFramesRemaining <= 0) {
+        m_logFile.close();
+        std::cout << "[LOGGING] Multi-frame capture complete! Saved to gpu_vram_multiframe_dump.txt" << std::endl;
+    }
 }
