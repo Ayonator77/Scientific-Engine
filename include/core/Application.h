@@ -24,6 +24,7 @@ private:
     void ProcessInput();
 
     bool m_isRunning;
+    bool m_isFullscreen = false;
     int m_width;
     int m_height;
 

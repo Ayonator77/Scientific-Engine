@@ -50,3 +50,9 @@ void Camera::ProcessMouseScroll(float y_offset) {
   if (m_radius > 20.0f)
     m_radius = 20.0f;
 }
+
+void Camera::UpdateResolution(int width, int height) {
+    if (height == 0) height = 1; // Prevent division by zero
+    m_screen_width = width;
+    m_screen_height = height;
+}
