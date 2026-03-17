@@ -98,7 +98,8 @@ void Application::run() {
             m_scene->GetSphSolver().GetVAO(), 
             m_scene->GetSphSolver().GetParticleCount(), 
             m_scene->GetCamera(),
-            m_scene->GetSphSolver().GetParams().smoothing_radius 
+            m_scene->GetSphSolver().GetParams().smoothing_radius,
+            m_scene->GetLights()
         );
         m_renderer->DrawLightBillboard(m_scene->GetCamera(), m_scene->GetLights());
 

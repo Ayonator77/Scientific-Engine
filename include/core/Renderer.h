@@ -21,7 +21,7 @@ public:
 
     void DrawPlanet(const Icosahedron& planet, const Camera& camera, const std::vector<PointLight>& lights) const;
     void DrawLightBillboard(const Camera& camera, const std::vector<PointLight>& lights);
-    void DrawParticle(unsigned int vao, int particle_count,  const Camera& camera, float particle_radius);
+    void DrawParticle(unsigned int vao, int particle_count, const Camera& camera, float particle_radius, const std::vector<PointLight>& lights);
     void Resize(int width, int height);
 
 private:

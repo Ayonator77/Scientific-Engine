@@ -65,7 +65,7 @@ void Renderer::DrawLightBillboard(const Camera& camera, const std::vector<PointL
     glDisable(GL_BLEND);
 }
 
-void Renderer::DrawParticle(unsigned int vao, int particle_count, const Camera& camera, float particle_radius) {
+void Renderer::DrawParticle(unsigned int vao, int particle_count, const Camera& camera, float particle_radius, const std::vector<PointLight>& lights) {
     if (particle_count == 0) return;
 
     // --- PASS 1: DRAW TO HIDDEN FRAMEBUFFER (Unchanged) ---
@@ -86,7 +86,6 @@ void Renderer::DrawParticle(unsigned int vao, int particle_count, const Camera& 
     m_ssfr_fbo->Unbind();
 
     // --- PASS 1.5: BILATERAL BLUR ---
-    // We draw the raw texture onto a fullscreen quad and blur it into the 2nd FBO
     m_ssfr_blur_fbo->Bind();
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -112,11 +111,24 @@ void Renderer::DrawParticle(unsigned int vao, int particle_count, const Camera& 
     
     // Provide both matrices to reconstruct the depth and normals
     m_ssfr_debug_shader->SetMat4("u_invProjection", glm::inverse(camera.GetProjectionMatrix()));
-    m_ssfr_debug_shader->SetMat4("u_projection", camera.GetProjectionMatrix()); // <--- NEW!
+    m_ssfr_debug_shader->SetMat4("u_projection", camera.GetProjectionMatrix()); 
     
+    // <--- NEW: Send the View Matrix and Point Lights --->
+    m_ssfr_debug_shader->SetMat4("u_view", camera.GetViewMatrix()); 
+    
+    int num_lights = static_cast<int>(lights.size());
+    m_ssfr_debug_shader->SetInt("u_numLights", num_lights);
+    for (int i = 0; i < num_lights; i++) {
+        std::string base = "u_lights[" + std::to_string(i) + "].";
+        m_ssfr_debug_shader->SetVec3(base + "position", lights[i].position);
+        m_ssfr_debug_shader->SetVec3(base + "color", lights[i].color);
+        m_ssfr_debug_shader->SetFloat(base + "intensity", lights[i].intensity);
+    }
+    // <--------------------------------------------------->
+
     // Bind the BLURRED texture to Slot 0
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_ssfr_blur_fbo->GetColorAttachment()); // <--- Read from Pass 1.5
+    glBindTexture(GL_TEXTURE_2D, m_ssfr_blur_fbo->GetColorAttachment()); 
     m_ssfr_debug_shader->SetInt("u_colorTexture", 0);
 
     glBindVertexArray(m_dummy_VAO);
