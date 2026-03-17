@@ -1,7 +1,7 @@
 @echo off
 
 :: Check if the specific build directory exists
-if not exist "build\vs2026" (
+if not exist "build\msvc" (
     echo --- Build Directory Missing. Running CMake Configure ---
     cmake --preset msvc
     

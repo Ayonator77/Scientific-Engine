@@ -14,7 +14,6 @@
 
 // ==============================================================================
 // TEST ENVIRONMENT: HEADLESS OPENGL CONTEXT
-// Research physics engines must test GPU code without requiring a user interface.
 // This spins up an invisible OpenGL context to allow VAO/VBO generation in tests.
 // ==============================================================================
 class HeadlessGraphicsEnvironment : public ::testing::Environment {

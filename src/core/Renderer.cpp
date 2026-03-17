@@ -126,3 +126,8 @@ void Renderer::DrawParticle(unsigned int vao, int particle_count, const Camera& 
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
 }
+
+void Renderer::Resize(int width, int height) {
+    if (m_ssfr_fbo) m_ssfr_fbo->Resize(width, height);
+    if (m_ssfr_blur_fbo) m_ssfr_blur_fbo->Resize(width, height);
+}

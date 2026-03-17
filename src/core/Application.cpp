@@ -25,6 +25,24 @@ void Application::ProcessInput() {
 
         if (event.type == SDL_QUIT) m_isRunning = false;
 
+        // --- HANDLE DYNAMIC WINDOW RESIZING ---
+        if (event.type == SDL_WINDOWEVENT) {
+            if (event.window.event == SDL_WINDOWEVENT_RESIZED || event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                m_width = event.window.data1;
+                m_height = event.window.data2;
+                
+                glViewport(0, 0, m_width, m_height); // Tell OpenGL the new canvas size
+                m_scene->GetCamera().UpdateResolution(m_width, m_height); // Fix aspect ratio
+                m_renderer->Resize(m_width, m_height); // Reallocate SSFR buffers
+            }
+        }
+
+        // --- FULLSCREEN TOGGLE (F11) ---
+        if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F11) {
+            m_isFullscreen = !m_isFullscreen;
+            SDL_SetWindowFullscreen(m_context->GetWindow(), m_isFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+        }
+
         if (event.type == SDL_MOUSEWHEEL && !m_editor->WantsCaptureMouse()) {
             m_scene->GetCamera().ProcessMouseScroll(static_cast<float>(event.wheel.y));
         }

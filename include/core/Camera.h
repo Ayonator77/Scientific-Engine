@@ -14,6 +14,7 @@ public:
   // matrix generators
   glm::mat4 GetViewMatrix() const;
   glm::mat4 GetProjectionMatrix() const;
+  void UpdateResolution(int width, int height);
 
 private:
   glm::vec3 m_target; // center of the planet
