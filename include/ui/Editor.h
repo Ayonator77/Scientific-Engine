@@ -68,4 +68,9 @@ private:
    std::vector<CsvDataPoint> m_validationData;
    bool m_showValidation = false;
    bool m_showMemoryProfiler = false;
+   float m_statAvgVelocity = 0.0f;
+   float m_statMaxVelocity = 0.0f;
+   float m_statPearsonR = 0.0f;
+   bool m_isEquilibriumVerified = false;
+   bool m_isPressureVerified = false;
 };
