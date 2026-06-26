@@ -53,7 +53,6 @@ void main() {
     vec3 dy1 = posUp - posCurrent;
     vec3 dy2 = posCurrent - posDown;
 
-    // --- ADAPTIVE DIFFERENCE (THE FIX) ---
     // Choose the slope with the smallest depth jump. This completely eliminates 
     // the forward-difference bias (centering your highlights) AND prevents the 
     // normals from flattening out at the water's silhouette.
